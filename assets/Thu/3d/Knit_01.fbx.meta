@@ -1,0 +1,96 @@
+{
+  "ver": "2.3.14",
+  "importer": "fbx",
+  "imported": true,
+  "uuid": "19d5f1f3-577e-4bb6-ba49-5d87ad84a59e",
+  "files": [],
+  "subMetas": {
+    "33452": {
+      "importer": "gltf-material",
+      "uuid": "19d5f1f3-577e-4bb6-ba49-5d87ad84a59e@33452",
+      "displayName": "",
+      "id": "33452",
+      "name": "color.material",
+      "userData": {
+        "gltfIndex": 0
+      },
+      "ver": "1.0.14",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "1888f": {
+      "importer": "gltf-mesh",
+      "uuid": "19d5f1f3-577e-4bb6-ba49-5d87ad84a59e@1888f",
+      "displayName": "",
+      "id": "1888f",
+      "name": "mesh.002.mesh",
+      "userData": {
+        "gltfIndex": 0,
+        "triangleCount": 344
+      },
+      "ver": "1.1.1",
+      "imported": true,
+      "files": [
+        ".bin",
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "6d4bb": {
+      "importer": "gltf-scene",
+      "uuid": "19d5f1f3-577e-4bb6-ba49-5d87ad84a59e@6d4bb",
+      "displayName": "",
+      "id": "6d4bb",
+      "name": "Knit_01.prefab",
+      "userData": {
+        "gltfIndex": 0
+      },
+      "ver": "1.0.14",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    }
+  },
+  "userData": {
+    "imageMetas": [],
+    "fbx": {
+      "smartMaterialEnabled": true
+    },
+    "lods": {
+      "enable": false,
+      "hasBuiltinLOD": false,
+      "options": [
+        {
+          "screenRatio": 0.25,
+          "faceCount": 1
+        },
+        {
+          "screenRatio": 0.125,
+          "faceCount": 0.25
+        },
+        {
+          "screenRatio": 0.01,
+          "faceCount": 0.1
+        }
+      ]
+    },
+    "assetFinder": {
+      "meshes": [
+        "19d5f1f3-577e-4bb6-ba49-5d87ad84a59e@1888f"
+      ],
+      "skeletons": [],
+      "textures": [],
+      "materials": [
+        "19d5f1f3-577e-4bb6-ba49-5d87ad84a59e@33452"
+      ],
+      "scenes": [
+        "19d5f1f3-577e-4bb6-ba49-5d87ad84a59e@6d4bb"
+      ]
+    }
+  }
+}

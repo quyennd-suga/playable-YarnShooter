@@ -1,0 +1,311 @@
+// MK Toon URP Standard Simple — Cocos Creator 3.8 port
+// Original: Michael Kremmel — www.michaelkremmel.de
+// Cocos port: simplified equivalent (Cel/Banded toon + simple specular + rim)
+
+CCEffect %{
+  techniques:
+  - name: opaque
+    passes:
+    # Main toon pass
+    - vert: toon-vs:vert
+      frag: toon-fs:frag
+      depthStencilState:
+        depthTest: true
+        depthWrite: true
+      properties: &mainProps
+        # Tiling
+        tilingOffset:               { value: [1.0, 1.0, 0.0, 0.0] }
+        # Albedo
+        albedoColor:                { value: [1.0, 1.0, 1.0, 1.0], editor: { type: color, displayName: "Albedo Color" } }
+        albedoMap:                  { value: white, editor: { displayName: "Albedo Map" } }
+        alphaCutoff:                { value: 0.5,  editor: { parent: USE_ALPHA_TEST, slide: true, range: [0.0, 1.0], step: 0.001, displayName: "Alpha Cutoff" } }
+        # Specular
+        specularColor:              { value: [1.0, 1.0, 1.0, 1.0], editor: { type: color, displayName: "Specular Color" } }
+        smoothness:                 { value: 0.5,  editor: { slide: true, range: [0.0, 1.0], step: 0.001, displayName: "Smoothness" } }
+        specularIntensity:          { value: 1.0,  editor: { range: [0.0, 4.0], slide: true, step: 0.01, displayName: "Specular Intensity" } }
+        # Normal
+        normalMap:                  { value: normal, editor: { parent: USE_NORMAL_MAP, displayName: "Normal Map" } }
+        normalMapIntensity:         { value: 1.0,  editor: { parent: USE_NORMAL_MAP, range: [0.0, 5.0], slide: true, step: 0.01, displayName: "Normal Intensity" } }
+        # Emission
+        emissionColor:              { value: [0.0, 0.0, 0.0, 1.0], editor: { type: color, displayName: "Emission Color" } }
+        emissionMap:                { value: black, editor: { parent: USE_EMISSION_MAP, displayName: "Emission Map" } }
+        # Toon Diffuse
+        diffuseSmoothness:          { value: 0.0,  target: toonDiffuseParams.x, editor: { slide: true, range: [0.0, 1.0], step: 0.001, displayName: "Diffuse Smoothness" } }
+        diffuseThresholdOffset:     { value: 0.25, target: toonDiffuseParams.y, editor: { slide: true, range: [0.0, 1.0], step: 0.001, displayName: "Diffuse Threshold Offset" } }
+        lightBands:                 { value: 4.0,  target: toonDiffuseParams.z, editor: { range: [2.0, 12.0], slide: true, step: 1.0, displayName: "Light Bands (Banded mode)" } }
+        lightBandsScale:            { value: 0.5,  target: toonDiffuseParams.w, editor: { slide: true, range: [0.0, 1.0], step: 0.001, displayName: "Light Bands Scale" } }
+        # Toon Specular
+        specularSmoothness:         { value: 0.0,  target: toonSpecParams.x, editor: { slide: true, range: [0.0, 1.0], step: 0.001, displayName: "Specular Smoothness" } }
+        specularThresholdOffset:    { value: 0.25, target: toonSpecParams.y, editor: { slide: true, range: [0.0, 1.0], step: 0.001, displayName: "Specular Threshold Offset" } }
+        # Rim
+        rimColor:                   { value: [1.0, 1.0, 1.0, 1.0], editor: { type: color, parent: USE_RIM, displayName: "Rim Color" } }
+        rimSize:                    { value: 1.0,  target: rimParams.x, editor: { parent: USE_RIM, range: [0.0, 5.0], slide: true, step: 0.001, displayName: "Rim Size" } }
+        rimSmoothness:              { value: 0.5,  target: rimParams.y, editor: { parent: USE_RIM, range: [0.0, 1.0], slide: true, step: 0.001, displayName: "Rim Smoothness" } }
+        rimThresholdOffset:         { value: 0.25, target: rimParams.z, editor: { parent: USE_RIM, range: [0.0, 1.0], slide: true, step: 0.001, displayName: "Rim Threshold Offset" } }
+
+    # Shadow caster
+    - &shadow-caster
+      vert: shadow-caster-vs:vert
+      frag: shadow-caster-fs:frag
+      phase: shadow-caster
+      propertyIndex: 0
+      rasterizerState:
+        cullMode: front
+      properties:
+        tilingOffset: { value: [1.0, 1.0, 0.0, 0.0] }
+        albedoColor:  { value: [1.0, 1.0, 1.0, 1.0] }
+        alphaCutoff:  { value: 0.5, editor: { parent: USE_ALPHA_TEST } }
+        albedoMap:    { value: white, editor: { displayName: "Albedo Map" } }
+
+  - name: transparent
+    passes:
+    - vert: toon-vs:vert
+      frag: toon-fs:frag
+      depthStencilState: &dsTransparent
+        depthTest: true
+        depthWrite: false
+      blendState: &bsTransparent
+        targets:
+        - blend: true
+          blendSrc: src_alpha
+          blendDst: one_minus_src_alpha
+          blendDstAlpha: one_minus_src_alpha
+      properties: *mainProps
+    - *shadow-caster
+}%
+
+# ===========================================================================
+#  Toon Main Pass
+# ===========================================================================
+CCProgram toon-vs %{
+  precision highp float;
+  #include <legacy/input-standard>
+  #include <builtin/uniforms/cc-global>
+  #include <legacy/local-batch>
+
+  uniform ToonVertConstants {
+    vec4 tilingOffset;
+  };
+
+  out vec3 v_worldPos;
+  out vec3 v_worldNormal;
+  out vec3 v_worldTangent;
+  out vec3 v_worldBitangent;
+  out vec2 v_uv;
+
+  vec4 vert () {
+    StandardVertInput In;
+    CCVertInput(In);
+    mat4 matWorld, matWorldIT;
+    CCGetWorldMatrixFull(matWorld, matWorldIT);
+
+    vec4 worldPos = matWorld * In.position;
+    v_worldPos = worldPos.xyz;
+    v_worldNormal = normalize((matWorldIT * vec4(In.normal, 0.0)).xyz);
+
+    #if USE_NORMAL_MAP
+      v_worldTangent = normalize((matWorld * vec4(In.tangent.xyz, 0.0)).xyz);
+      v_worldBitangent = cross(v_worldNormal, v_worldTangent) * In.tangent.w;
+    #else
+      v_worldTangent = vec3(1.0, 0.0, 0.0);
+      v_worldBitangent = vec3(0.0, 1.0, 0.0);
+    #endif
+
+    v_uv = a_texCoord * tilingOffset.xy + tilingOffset.zw;
+    return cc_matProj * cc_matView * worldPos;
+  }
+}%
+
+CCProgram toon-fs %{
+  precision highp float;
+  #include <builtin/uniforms/cc-global>
+  #include <legacy/output>
+
+  in vec3 v_worldPos;
+  in vec3 v_worldNormal;
+  in vec3 v_worldTangent;
+  in vec3 v_worldBitangent;
+  in vec2 v_uv;
+
+  // ----- UI macros -----
+  #pragma define-meta USE_ALBEDO_MAP
+  #pragma define-meta USE_NORMAL_MAP
+  #pragma define-meta USE_EMISSION_MAP
+  #pragma define-meta USE_ALPHA_TEST
+  #pragma define-meta USE_RIM
+  // Light mode: 0=Cel, 1=Banded, 2=Smooth (mặc định Cel)
+  #pragma define-meta MK_LIGHT_MODE range([0, 2])
+
+  uniform ToonFragConstants {
+    vec4 albedoColor;
+    vec4 specularColor;
+    vec4 emissionColor;
+    vec4 rimColor;
+    // x=diffuseSmooth, y=diffuseThreshold, z=lightBands, w=lightBandsScale
+    vec4 toonDiffuseParams;
+    // x=specularSmooth, y=specularThreshold
+    vec4 toonSpecParams;
+    // x=rimSize, y=rimSmooth, z=rimThreshold
+    vec4 rimParams;
+    float smoothness;
+    float specularIntensity;
+    float normalMapIntensity;
+    float alphaCutoff;
+  };
+
+  uniform sampler2D albedoMap;
+  uniform sampler2D normalMap;
+  uniform sampler2D emissionMap;
+
+  float ToonStep(float value, float threshold, float smoothness) {
+    float halfS = smoothness * 0.5;
+    return smoothstep(threshold - halfS, threshold + halfS, value);
+  }
+
+  float BandedLight(float value, float bands, float scale) {
+    float b = max(bands, 1.0);
+    float stepped = floor(value * b) / b;
+    return mix(value, stepped, scale);
+  }
+
+  vec3 GetWorldNormal() {
+    vec3 N = normalize(v_worldNormal);
+    #if USE_NORMAL_MAP
+      vec3 nm = texture(normalMap, v_uv).xyz * 2.0 - 1.0;
+      nm.xy *= normalMapIntensity;
+      vec3 T = normalize(v_worldTangent);
+      vec3 B = normalize(v_worldBitangent);
+      N = normalize(T * nm.x + B * nm.y + N * nm.z);
+    #endif
+    return N;
+  }
+
+  vec4 frag () {
+    vec4 base = albedoColor;
+    #if USE_ALBEDO_MAP
+      base *= texture(albedoMap, v_uv);
+    #endif
+    #if USE_ALPHA_TEST
+      if (base.a < alphaCutoff) discard;
+    #endif
+
+    vec3 N = GetWorldNormal();
+    vec3 L = normalize(-cc_mainLitDir.xyz);
+    vec3 V = normalize(cc_cameraPos.xyz - v_worldPos);
+    vec3 H = normalize(L + V);
+
+    float NdotL = clamp(dot(N, L) * 0.5 + 0.5, 0.0, 1.0);
+    float diffuse;
+    #if MK_LIGHT_MODE == 1
+      diffuse = BandedLight(NdotL, toonDiffuseParams.z, toonDiffuseParams.w);
+      diffuse = ToonStep(diffuse, toonDiffuseParams.y, toonDiffuseParams.x);
+    #elif MK_LIGHT_MODE == 2
+      diffuse = NdotL;
+    #else
+      diffuse = ToonStep(NdotL, toonDiffuseParams.y, toonDiffuseParams.x);
+    #endif
+
+    float NdotH = clamp(dot(N, H), 0.0, 1.0);
+    float specPower = mix(8.0, 256.0, smoothness);
+    float specRaw = pow(NdotH, specPower);
+    float spec = ToonStep(specRaw, toonSpecParams.y, toonSpecParams.x);
+
+    vec3 rim = vec3(0.0);
+    #if USE_RIM
+      float NdotV = 1.0 - clamp(dot(N, V), 0.0, 1.0);
+      float rimRaw = pow(NdotV, max(rimParams.x, 0.001));
+      float rimMask = ToonStep(rimRaw, rimParams.z, rimParams.y);
+      rim = rimColor.rgb * rimMask;
+    #endif
+
+    vec3 mainLight = cc_mainLitColor.rgb * cc_mainLitColor.w;
+    vec3 ambient = cc_ambientSky.rgb * cc_ambientSky.w;
+
+    vec3 color = base.rgb * (ambient + mainLight * diffuse);
+    color += specularColor.rgb * spec * specularIntensity * mainLight;
+    color += rim;
+
+    vec3 emission = emissionColor.rgb;
+    #if USE_EMISSION_MAP
+      emission *= texture(emissionMap, v_uv).rgb;
+    #endif
+    color += emission;
+
+    return CCFragOutput(vec4(color, base.a));
+  }
+}%
+
+# ===========================================================================
+#  Shadow Caster Pass
+# ===========================================================================
+CCProgram shadow-caster-vs %{
+  precision highp float;
+  #include <legacy/input-standard>
+  #include <builtin/uniforms/cc-global>
+  #include <builtin/uniforms/cc-shadow>
+  #include <legacy/local-batch>
+
+  uniform ShadowConstants {
+    vec4 tilingOffset;
+    vec4 albedoColor;
+    float alphaCutoff;
+  };
+
+  out vec2 v_uv;
+  out vec4 v_worldPos;
+  out highp vec2 v_clip_depth;
+
+  vec4 vert () {
+    StandardVertInput In;
+    CCVertInput(In);
+    mat4 matWorld, matWorldIT;
+    CCGetWorldMatrixFull(matWorld, matWorldIT);
+
+    v_worldPos = matWorld * In.position;
+    vec4 clipPos = cc_matLightViewProj * v_worldPos;
+    v_uv = a_texCoord * tilingOffset.xy + tilingOffset.zw;
+    v_clip_depth = clipPos.zw;
+    return clipPos;
+  }
+}%
+
+CCProgram shadow-caster-fs %{
+  precision highp float;
+  #include <common/data/packing>
+  #include <legacy/shadow-map-base>
+
+  in vec2 v_uv;
+  in vec4 v_worldPos;
+  in highp vec2 v_clip_depth;
+
+  uniform ShadowConstants {
+    vec4 tilingOffset;
+    vec4 albedoColor;
+    float alphaCutoff;
+  };
+
+  uniform sampler2D albedoMap;
+
+  vec4 frag () {
+    #if USE_ALPHA_TEST
+      vec4 base = albedoColor;
+      #if USE_ALBEDO_MAP
+        base *= texture(albedoMap, v_uv);
+      #endif
+      if (base.a < alphaCutoff) discard;
+    #endif
+
+    highp float clipDepth = v_clip_depth.x / v_clip_depth.y * 0.5 + 0.5;
+    #if CC_SHADOWMAP_USE_LINEAR_DEPTH
+      if (IS_SPOT_LIGHT(cc_shadowLPNNInfo.x)) {
+        clipDepth = CCGetLinearDepth(v_worldPos.xyz);
+      }
+    #endif
+
+    #if CC_SHADOWMAP_FORMAT == SHADOWMAP_FORMAT_RGBA8
+      return packDepthToRGBA(clipDepth);
+    #else
+      return vec4(clipDepth, 1.0, 1.0, 1.0);
+    #endif
+  }
+}%

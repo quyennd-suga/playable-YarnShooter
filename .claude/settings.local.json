@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__cocos-creator__server_check_server_connectivity",
+      "mcp__cocos-creator__server_get_server_status",
+      "mcp__cocos-creator__debug_get_editor_info",
+      "mcp__cocos-creator__scene_get_current_scene",
+      "mcp__cocos-creator__node_create_node",
+      "mcp__cocos-creator__component_set_component_property",
+      "mcp__cocos-creator__debug_get_console_logs",
+      "mcp__cocos-creator__project_refresh_assets",
+      "mcp__cocos-creator__debug_get_project_logs",
+      "mcp__cocos-creator__project_get_asset_info",
+      "mcp__cocos-creator__project_reimport_asset"
+    ]
+  }
+}

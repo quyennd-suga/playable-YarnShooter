@@ -1,0 +1,87 @@
+{
+  "__type__": "cc.Material",
+  "_name": "",
+  "_objFlags": 0,
+  "__editorExtras__": {},
+  "_native": "",
+  "_effectAsset": {
+    "__uuid__": "4619e1d8-aaf5-47da-a417-bf17e8191c52",
+    "__expectedType__": "cc.EffectAsset"
+  },
+  "_techIdx": 0,
+  "_defines": [
+    {
+      "USE_INSTANCING": true
+    },
+    {
+      "USE_INSTANCING": true,
+      "USE_ALBEDO_MAP": true
+    },
+    {}
+  ],
+  "_states": [
+    {
+      "rasterizerState": {},
+      "depthStencilState": {},
+      "blendState": {
+        "targets": [
+          {}
+        ]
+      }
+    },
+    {
+      "rasterizerState": {},
+      "depthStencilState": {},
+      "blendState": {
+        "targets": [
+          {}
+        ]
+      }
+    },
+    {
+      "rasterizerState": {},
+      "depthStencilState": {},
+      "blendState": {
+        "targets": [
+          {}
+        ]
+      }
+    }
+  ],
+  "_props": [
+    {
+      "outlineSize": 0.008
+    },
+    {
+      "albedoMap": {
+        "__uuid__": "740dddf9-993f-4e8f-8e53-d72d131f56ad@6c48a",
+        "__expectedType__": "cc.Texture2D"
+      },
+      "specularColor": {
+        "__type__": "cc.Color",
+        "r": 51,
+        "g": 51,
+        "b": 51,
+        "a": 255
+      },
+      "specularIntensity": 0,
+      "normalMap": {
+        "__uuid__": "740dddf9-993f-4e8f-8e53-d72d131f56ad@6c48a",
+        "__expectedType__": "cc.Texture2D"
+      },
+      "normalMapIntensity": 5,
+      "emissionColor": {
+        "__type__": "cc.Color",
+        "r": 51,
+        "g": 51,
+        "b": 51,
+        "a": 255
+      },
+      "diffuseSmoothness": 1,
+      "diffuseThresholdOffset": 0.8,
+      "lightBands": 5,
+      "specularThresholdOffset": 0.285
+    },
+    {}
+  ]
+}
