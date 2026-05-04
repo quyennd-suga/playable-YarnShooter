@@ -45,7 +45,7 @@
       "smoothness": 1,
       "specularIntensity": 0,
       "diffuseSmoothness": 1,
-      "diffuseThresholdOffset": 0.792,
+      "diffuseThresholdOffset": 0.8,
       "lightBands": 6,
       "lightBandsScale": 0.531,
       "specularSmoothness": 0.448,

@@ -504,6 +504,12 @@
       "scenes": [
         "692c375a-d1ab-402c-8991-7447c9bb6969@78471"
       ]
+    },
+    "meshOptimize": {
+      "enable": true,
+      "vertexCache": true,
+      "vertexFetch": true,
+      "overdraw": true
     }
   }
 }

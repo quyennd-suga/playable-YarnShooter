@@ -45,7 +45,7 @@
   ],
   "_props": [
     {
-      "outlineSize": 0.002
+      "outlineSize": 0.008
     },
     {
       "albedoColor": {
@@ -55,8 +55,10 @@
         "b": 39,
         "a": 255
       },
+      "smoothness": 1,
+      "specularIntensity": 0,
       "diffuseSmoothness": 1,
-      "diffuseThresholdOffset": 0.24,
+      "diffuseThresholdOffset": 0.7,
       "lightBands": 5,
       "lightBandsScale": 0.397,
       "specularThresholdOffset": 1
