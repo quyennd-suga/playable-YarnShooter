@@ -11,7 +11,24 @@
       "mcp__cocos-creator__project_refresh_assets",
       "mcp__cocos-creator__debug_get_project_logs",
       "mcp__cocos-creator__project_get_asset_info",
-      "mcp__cocos-creator__project_reimport_asset"
+      "mcp__cocos-creator__project_reimport_asset",
+      "mcp__cocos-creator__scene_get_scene_hierarchy",
+      "mcp__cocos-creator__project_get_assets",
+      "mcp__cocos-creator__node_get_node_info",
+      "mcp__cocos-creator__component_get_components",
+      "mcp__cocos-creator__project_find_asset_by_name",
+      "mcp__cocos-creator__project_get_asset_details",
+      "mcp__cocos-creator__node_set_node_property",
+      "mcp__cocos-creator__component_attach_script",
+      "mcp__cocos-creator__scene_save_scene",
+      "mcp__cocos-creator__component_add_component",
+      "mcp__cocos-creator__component_remove_component",
+      "mcp__cocos-creator__node_find_node_by_name",
+      "mcp__cocos-creator__node_set_node_transform",
+      "mcp__cocos-creator__sceneAdvanced_execute_scene_script",
+      "mcp__cocos-creator__debug_execute_script",
+      "mcp__cocos-creator__project_get_project_settings",
+      "mcp__cocos-creator__debug_validate_scene"
     ]
   }
 }

@@ -5,11 +5,12 @@
   "__editorExtras__": {},
   "_native": "",
   "_effectAsset": {
-    "__uuid__": "9fe15f26-81be-4610-928a-6794b03a3483",
+    "__uuid__": "a3cd009f-0ab0-420d-9278-b9fdab939bbc",
     "__expectedType__": "cc.EffectAsset"
   },
   "_techIdx": 0,
   "_defines": [
+    {},
     {},
     {}
   ],
@@ -31,26 +32,20 @@
           {}
         ]
       }
+    },
+    {
+      "rasterizerState": {},
+      "depthStencilState": {},
+      "blendState": {
+        "targets": [
+          {}
+        ]
+      }
     }
   ],
   "_props": [
-    {
-      "albedoColor": {
-        "__type__": "cc.Color",
-        "r": 30,
-        "g": 228,
-        "b": 237,
-        "a": 255
-      },
-      "smoothness": 1,
-      "specularIntensity": 0,
-      "diffuseSmoothness": 1,
-      "diffuseThresholdOffset": 0.792,
-      "lightBands": 6,
-      "lightBandsScale": 0.531,
-      "specularSmoothness": 0.448,
-      "specularThresholdOffset": 0.126
-    },
+    {},
+    {},
     {}
   ]
 }

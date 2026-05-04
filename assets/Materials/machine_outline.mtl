@@ -50,6 +50,13 @@
   ],
   "_props": [
     {
+      "outlineColor": {
+        "__type__": "cc.Color",
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 0
+      },
       "outlineSize": 0.008
     },
     {
@@ -78,7 +85,7 @@
         "a": 255
       },
       "diffuseSmoothness": 1,
-      "diffuseThresholdOffset": 0.8,
+      "diffuseThresholdOffset": 1,
       "lightBands": 5,
       "specularThresholdOffset": 0.285
     },

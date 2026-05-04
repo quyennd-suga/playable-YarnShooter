@@ -1,0 +1,58 @@
+CCEffect %{
+  techniques:
+  - name: opaque
+    passes:
+    - vert: conveyor-vs:vert
+      frag: conveyor-fs:frag
+      properties:
+        mainTexture:  { value: white }
+        tilingOffset: { value: [1, 1, 0, 0] }
+        baseColor:    { value: [1, 1, 1, 1], editor: { type: color } }
+        scrollSpeedX: { value: 0.0 }
+        scrollSpeedY: { value: -1.0 }
+}%
+
+CCProgram conveyor-vs %{
+  precision highp float;
+  #include <builtin/uniforms/cc-global>
+  #include <builtin/uniforms/cc-local>
+
+  in vec3 a_position;
+  in vec2 a_texCoord;
+
+  out vec2 v_uv;
+
+  uniform Constant {
+    vec4  tilingOffset;
+    vec4  baseColor;
+    float scrollSpeedX;
+    float scrollSpeedY;
+  };
+
+  vec4 vert () {
+    v_uv    = a_texCoord * tilingOffset.xy + tilingOffset.zw;
+    v_uv.x += scrollSpeedX * cc_time.x;
+    v_uv.y += scrollSpeedY * cc_time.x;
+
+    return cc_matViewProj * cc_matWorld * vec4(a_position, 1.0);
+  }
+}%
+
+CCProgram conveyor-fs %{
+  precision highp float;
+
+  in vec2 v_uv;
+
+  uniform sampler2D mainTexture;
+
+  uniform Constant {
+    vec4  tilingOffset;
+    vec4  baseColor;
+    float scrollSpeedX;
+    float scrollSpeedY;
+  };
+
+  vec4 frag () {
+    return texture(mainTexture, v_uv) * baseColor;
+  }
+}%
