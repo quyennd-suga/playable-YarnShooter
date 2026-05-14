@@ -4,6 +4,9 @@ import { BoardScaler } from './BoardScaler';
 import { Yarn } from './Yarn';
 import { Bobbin } from './Bobbin';
 import { MapObjectSpawner } from './MapObjectSpawner';
+import { LevelManager } from './Core/LevelManager';
+import { GameManager } from './Core/GameManager';
+import { TrayManager } from './Core/TrayManager';
 
 const { ccclass, property } = _decorator;
 
@@ -12,10 +15,10 @@ import { LevelData } from './Data/LevelInterfaces';
 @ccclass('MapGenerator')
 export class MapGenerator extends Component {
 
-    @property(JsonAsset)    public levelData:   JsonAsset   = null;
-    @property(Node)         public aboveParent: Node        = null;
-    @property(Node)         public underParent: Node        = null;
-    @property(BoardScaler)  public boardScaler: BoardScaler = null;
+    @property(JsonAsset) public levelData: JsonAsset = null;
+    @property(Node) public aboveParent: Node = null;
+    @property(Node) public underParent: Node = null;
+    @property(BoardScaler) public boardScaler: BoardScaler = null;
 
     @property public bobbinColumnSpacing: number = 0.15;
     @property public bobbinRowSpacing: number = 0.15;
@@ -24,13 +27,15 @@ export class MapGenerator extends Component {
 
     start() {
         this.generateMap();
+        
+        TrayManager.instance.resetForNewLevel();
     }
 
     public generateMap(): void {
         this.clearMap();
 
-        const data   = this.levelData.json as LevelData;
-        
+        const data = this.levelData.json as LevelData;
+
         // 1. Generate Above Layer (Yarns)
         if (data.PixelImage && data.PixelImage.pixels) {
             const pixels = data.PixelImage.pixels;
@@ -40,19 +45,28 @@ export class MapGenerator extends Component {
 
             for (let i = 0; i < pixels.length; i++) {
                 const pixel = pixels[i];
-                const node  = MapObjectSpawner.instance.getYarn(parent);
+                const node = MapObjectSpawner.instance.getYarn(parent);
 
                 const pos = this.boardScaler.getChildLocalPosition(pixel.x, pixel.y);
                 node.setPosition(pos.x, pos.y, pos.z);
 
                 node.getComponent(Yarn)?.setColor(MaterialPalette.getMaterialById(pixel.material).color);
+                const yarnComp = node.getComponent(Yarn);
+                if (yarnComp) {
+                    yarnComp.data = pixel;
+                    GameManager.instance?.registerYarn(yarnComp);
+                }
             }
 
             this.boardScaler.adjustScale();
         }
 
         // 2. Generate Under Layer (Bobbins - Placeholders)
+        if (data.QueueGroup && data.QueueGroup.queues) {
+            LevelManager.instance.setupRows(data.QueueGroup.queues.length);
+        }
         this.spawnBobbins(data);
+
         // 3. Modifiers & Special Bobbins (Placeholders)
         this.spawnLocks(data);
         this.spawnMovers(data);
@@ -60,6 +74,9 @@ export class MapGenerator extends Component {
         this.spawnFrozenShooters(data);
         this.spawnConnections(data);
         this.spawnMysteryShooters(data);
+
+        // 4. Cập nhật lại các Bobbin ngoài cùng được phép click
+        LevelManager.instance.initQueueStates();
     }
 
     private spawnBobbins(data: LevelData): void {
@@ -74,7 +91,7 @@ export class MapGenerator extends Component {
             const queue = queues[qIdx];
             if (!queue.shooters) continue;
 
-            const colX = startX + (queues.length - 1 - qIdx) * this.bobbinColumnSpacing;
+            const colX = startX + qIdx * this.bobbinColumnSpacing;
 
             for (let sIdx = 0; sIdx < queue.shooters.length; sIdx++) {
                 const shooter = queue.shooters[sIdx];
@@ -85,11 +102,17 @@ export class MapGenerator extends Component {
                 bobbinNode.name = "Bobbin_" + shooter.id;
 
                 bobbinNode.setPosition(colX, 0, sIdx * this.bobbinRowSpacing);
-                
+
                 // Đổi màu Bobbin tương tự như Yarn
                 const color = MaterialPalette.getMaterialById(shooter.material).color;
-                bobbinNode.getComponent(Bobbin)?.setColor(color);
-                
+                const bobbinComp = bobbinNode.getComponent(Bobbin);
+                if (bobbinComp) {
+                    bobbinComp.setColor(color);
+                    bobbinComp.data = shooter;
+                    bobbinComp.setScore(shooter.ammo);
+                    LevelManager.instance.addBobbinToRow(qIdx, bobbinComp);
+                }
+
                 // Lưu vào map để sau này replace bởi Lock/Mover/Pipe
                 this.idToBobbin.set(shooter.id, bobbinNode);
             }
@@ -152,7 +175,7 @@ export class MapGenerator extends Component {
 
     private spawnFrozenShooters(data: LevelData): void {
         if (!data.FrozenShooters || !data.FrozenShooters.IceBlocks) return;
-        
+
         for (let iceData of data.FrozenShooters.IceBlocks) {
             const bobbinNode = this.idToBobbin.get(iceData.ShooterId);
             if (!bobbinNode) continue;
@@ -183,6 +206,8 @@ export class MapGenerator extends Component {
         }
     }
 
+    /** Port 1:1 từ Unity MapGenerator.SpawnMysteryShooter:
+     *  với mỗi ShooterId trong SurpriseShooters → gọi Bobbin.setMystery() để che màu + bật icon "?". */
     private spawnMysteryShooters(data: LevelData): void {
         if (!data.SurpriseShooters || !data.SurpriseShooters.ShooterIds) return;
 
@@ -190,8 +215,8 @@ export class MapGenerator extends Component {
             const bobbinNode = this.idToBobbin.get(id);
             if (!bobbinNode) continue;
 
-            // Đổi tên hoặc đánh dấu bobbin này là ẩn/bất ngờ (mystery)
-            bobbinNode.name = bobbinNode.name + "_Mystery";
+            const bobbin = bobbinNode.getComponent(Bobbin);
+            if (bobbin) bobbin.setMystery();
         }
     }
 

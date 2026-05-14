@@ -48,6 +48,20 @@
       "outlineSize": 0.008
     },
     {
+      "albedoColor": {
+        "__type__": "cc.Color",
+        "r": 109,
+        "g": 109,
+        "b": 109,
+        "a": 255
+      },
+      "specularColor": {
+        "__type__": "cc.Color",
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 255
+      },
       "smoothness": 1,
       "specularIntensity": 0,
       "diffuseSmoothness": 1,

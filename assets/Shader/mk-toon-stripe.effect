@@ -1,0 +1,140 @@
+// MK Toon Stripe — toon shader cho mesh 3D với 2 màu sen kẽ
+// Pattern stripe procedural từ UV (giống rope-stripe trail) + AO map + normal map
+
+CCEffect %{
+  techniques:
+  - name: opaque
+    passes:
+    - vert: stripe-vs:vert
+      frag: stripe-fs:frag
+      depthStencilState:
+        depthTest: true
+        depthWrite: true
+      properties: &mainProps
+        # Tiling
+        tilingOffset:               { value: [1.0, 1.0, 0.0, 0.0] }
+        # 2 màu sen kẽ (set từ script)
+        colorA:                     { value: [1.0, 1.0, 1.0, 1.0], editor: { type: color, displayName: "Color A" } }
+        colorB:                     { value: [0.5, 0.5, 0.5, 1.0], editor: { type: color, displayName: "Color B" } }
+        # Procedural stripe math
+        stripeCount:                { value: 16.0, editor: { range: [1.0, 64.0], slide: true, step: 1.0, displayName: "Stripe Count" } }
+        colorARatio:                { value: 0.5,  editor: { slide: true, range: [0.0, 1.0], step: 0.001, displayName: "Color A Ratio" } }
+        diagonalAmount:             { value: 1.0,  editor: { range: [-4.0, 4.0], slide: true, step: 0.01, displayName: "Diagonal Amount" } }
+        edgeSoftness:               { value: 0.02, editor: { slide: true, range: [0.0, 0.5], step: 0.001, displayName: "Stripe Edge Softness" } }
+        # AO map
+        aoMap:                      { value: white, editor: { displayName: "AO Map" } }
+        aoIntensity:                { value: 1.0,  editor: { slide: true, range: [0.0, 2.0], step: 0.01, displayName: "AO Intensity" } }
+        # Normal map
+        normalMap:                  { value: normal, editor: { displayName: "Normal Map" } }
+        normalMapIntensity:         { value: 1.0,  editor: { slide: true, range: [0.0, 5.0], step: 0.01, displayName: "Normal Intensity" } }
+        # Lighting (mostly unlit để match rope trail vibrant look)
+        ambientStrength:            { value: 0.85, editor: { slide: true, range: [0.0, 1.0], step: 0.01, displayName: "Ambient Strength" } }
+        # Specular
+        specularColor:              { value: [1.0, 1.0, 1.0, 1.0], editor: { type: color, displayName: "Specular Color" } }
+        specularPower:              { value: 32.0, editor: { range: [1.0, 256.0], slide: true, step: 1.0, displayName: "Specular Power" } }
+        specularIntensity:          { value: 0.0,  editor: { slide: true, range: [0.0, 4.0], step: 0.01, displayName: "Specular Intensity" } }
+}%
+
+CCProgram stripe-vs %{
+  precision highp float;
+  #include <legacy/input-standard>
+  #include <builtin/uniforms/cc-global>
+  #include <legacy/local-batch>
+
+  uniform StripeVertConstants {
+    vec4 tilingOffset;
+  };
+
+  out vec3 v_worldPos;
+  out vec3 v_worldNormal;
+  out vec3 v_worldTangent;
+  out vec3 v_worldBitangent;
+  out vec2 v_uv;
+
+  vec4 vert () {
+    StandardVertInput In;
+    CCVertInput(In);
+    mat4 matWorld, matWorldIT;
+    CCGetWorldMatrixFull(matWorld, matWorldIT);
+
+    vec4 worldPos = matWorld * In.position;
+    v_worldPos = worldPos.xyz;
+    v_worldNormal = normalize((matWorldIT * vec4(In.normal, 0.0)).xyz);
+    v_worldTangent = normalize((matWorld * vec4(In.tangent.xyz, 0.0)).xyz);
+    v_worldBitangent = cross(v_worldNormal, v_worldTangent) * In.tangent.w;
+    v_uv = a_texCoord * tilingOffset.xy + tilingOffset.zw;
+
+    return cc_matProj * cc_matView * worldPos;
+  }
+}%
+
+CCProgram stripe-fs %{
+  precision highp float;
+  #include <builtin/uniforms/cc-global>
+  #include <legacy/output>
+
+  in vec3 v_worldPos;
+  in vec3 v_worldNormal;
+  in vec3 v_worldTangent;
+  in vec3 v_worldBitangent;
+  in vec2 v_uv;
+
+  uniform StripeFragConstants {
+    vec4 colorA;
+    vec4 colorB;
+    vec4 specularColor;
+    float stripeCount;
+    float colorARatio;
+    float diagonalAmount;
+    float edgeSoftness;
+    float aoIntensity;
+    float normalMapIntensity;
+    float ambientStrength;
+    float specularPower;
+    float specularIntensity;
+  };
+
+  uniform sampler2D aoMap;
+  uniform sampler2D normalMap;
+
+  vec3 GetWorldNormal() {
+    vec3 N = normalize(v_worldNormal);
+    vec3 nm = texture(normalMap, v_uv).xyz * 2.0 - 1.0;
+    nm.xy *= normalMapIntensity;
+    vec3 T = normalize(v_worldTangent);
+    vec3 B = normalize(v_worldBitangent);
+    return normalize(T * nm.x + B * nm.y + N * nm.z);
+  }
+
+  vec4 frag () {
+    // ── Procedural stripe (giống rope-stripe trail) ──
+    float f = fract(v_uv.x * stripeCount + v_uv.y * diagonalAmount);
+    float stripeMask = smoothstep(colorARatio - edgeSoftness, colorARatio + edgeSoftness, f);
+    vec4 base = mix(colorA, colorB, stripeMask);
+
+    // ── AO shadow multiplier ──
+    float ao = texture(aoMap, v_uv).r;
+    ao = mix(1.0, ao, aoIntensity);
+    base.rgb *= ao;
+
+    // ── Mostly unlit (match vibrant look của rope trail) ──
+    // Subtle Half-Lambert shading nhưng KHÔNG multiply mainLight để màu giữ vibrant
+    vec3 N = GetWorldNormal();
+    vec3 L = normalize(-cc_mainLitDir.xyz);
+    float halfLambert = clamp(dot(N, L) * 0.5 + 0.5, 0.0, 1.0);
+    float lit = mix(ambientStrength, 1.0, halfLambert);
+
+    vec3 color = base.rgb * lit;
+
+    // ── Specular (Phong, simple, tắt mặc định) ──
+    if (specularIntensity > 0.0) {
+      vec3 V = normalize(cc_cameraPos.xyz - v_worldPos);
+      vec3 H = normalize(L + V);
+      float NdotH = clamp(dot(N, H), 0.0, 1.0);
+      float spec = pow(NdotH, specularPower);
+      color += specularColor.rgb * spec * specularIntensity;
+    }
+
+    return CCFragOutput(vec4(color, base.a));
+  }
+}%

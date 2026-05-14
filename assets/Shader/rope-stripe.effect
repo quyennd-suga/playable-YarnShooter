@@ -1,0 +1,76 @@
+// Rope Stripe — port từ Unity Custom/RopeStripe shader
+// Tạo các sọc xen kẽ 2 màu (ColorA, ColorB) với độ chéo điều chỉnh được
+// Dùng cho cc.Line / cc.ParticleSystem trail module
+
+CCEffect %{
+  temporaries:
+    b1: &b1
+      targets:
+      - blend: true
+        blendSrc: src_alpha
+        blendDst: one_minus_src_alpha
+        blendSrcAlpha: src_alpha
+        blendDstAlpha: one_minus_src_alpha
+    d1: &d1 { depthTest: true, depthWrite: false }
+    r1: &r1 { cullMode: none }
+    p1: &p1
+      mainTiling_Offset:     { value: [1.0, 1.0, 0.0, 0.0], editor: { displayName: "Tiling/Offset" } }
+      frameTile_velLenScale: { value: [1.0, 1.0, 0.0, 0.0], editor: { displayName: "FrameTile/Vel" } }
+      scale:                 { value: [1.0, 1.0, 1.0, 1.0], editor: { displayName: "Scale" } }
+      nodeRotation:          { value: [0.0, 0.0, 0.0, 1.0], editor: { displayName: "Node Rotation" } }
+      colorA:                { value: [0.6, 0.35, 0.1, 1.0], editor: { type: color, displayName: "Color A" } }
+      colorB:                { value: [0.95, 0.85, 0.6, 1.0], editor: { type: color, displayName: "Color B" } }
+      stripeCount:           { value: 6.0, editor: { range: [1.0, 64.0], slide: true, step: 1.0, displayName: "Stripe Count" } }
+      colorARatio:           { value: 0.667, editor: { slide: true, range: [0.0, 1.0], step: 0.001, displayName: "Color A Ratio" } }
+      diagonalAmount:        { value: 0.5, editor: { range: [-4.0, 4.0], slide: true, step: 0.01, displayName: "Diagonal Amount" } }
+      useVertexColorAlpha:   { value: 1.0, editor: { slide: true, range: [0.0, 1.0], step: 1.0, displayName: "Use Vertex Alpha (0/1)" } }
+
+  techniques:
+  - name: alpha-blend
+    passes:
+    - vert: builtin/internal/particle-trail:vs_main
+      frag: stripe-fs:frag
+      rasterizerState: *r1
+      depthStencilState: *d1
+      blendState: *b1
+      properties: *p1
+    - vert: builtin/internal/particle-trail:vs_main
+      frag: stripe-fs:frag
+      phase: deferred-forward
+      rasterizerState: *r1
+      depthStencilState: *d1
+      blendState: *b1
+      propertyIndex: 0
+}%
+
+CCProgram stripe-fs %{
+  precision mediump float;
+  #include <legacy/output>
+
+  in vec2 uv;
+  in vec4 color;
+
+  uniform StripeFragConstants {
+    vec4 colorA;
+    vec4 colorB;
+    float stripeCount;
+    float colorARatio;
+    float diagonalAmount;
+    float useVertexColorAlpha;
+  };
+
+  vec4 frag () {
+    // Match Unity: frac(uv.x * stripeCount + uv.y * diagonalAmount)
+    float f = fract(uv.x * stripeCount + uv.y * diagonalAmount);
+    // step(f, ratio) = 1 nếu f <= ratio (giống Unity step((half)f, ColorARatio))
+    float mask = step(f, colorARatio);
+    vec4 col = mix(colorB, colorA, mask);
+
+    // Match Unity: col.a *= IN.color.a
+    // useVertexColorAlpha=1 → multiply alpha vertex color (gradient cc.Line)
+    // useVertexColorAlpha=0 → giữ alpha gốc của colorA/colorB
+    col.a *= mix(1.0, color.a, useVertexColorAlpha);
+
+    return CCFragOutput(col);
+  }
+}%

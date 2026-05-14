@@ -5,12 +5,11 @@
   "__editorExtras__": {},
   "_native": "",
   "_effectAsset": {
-    "__uuid__": "4619e1d8-aaf5-47da-a417-bf17e8191c52",
+    "__uuid__": "ac3426ef-be5a-4856-b705-d41d90cda1b9",
     "__expectedType__": "cc.EffectAsset"
   },
   "_techIdx": 0,
   "_defines": [
-    {},
     {},
     {}
   ],
@@ -32,29 +31,13 @@
           {}
         ]
       }
-    },
-    {
-      "rasterizerState": {},
-      "depthStencilState": {},
-      "blendState": {
-        "targets": [
-          {}
-        ]
-      }
     }
   ],
   "_props": [
     {
-      "outlineSize": 0.008
-    },
-    {
-      "smoothness": 1,
-      "specularIntensity": 0,
-      "diffuseSmoothness": 1,
-      "diffuseThresholdOffset": 0.7,
-      "lightBands": 5,
-      "lightBandsScale": 0.397,
-      "specularThresholdOffset": 1
+      "stripeCount": 4,
+      "colorARatio": 0.5,
+      "useVertexColorAlpha": 0
     },
     {}
   ]

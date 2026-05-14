@@ -50,7 +50,7 @@ export class BoardScaler extends Component {
 
     public getChildLocalPosition(pixelX: number, pixelY: number): Vec3 {
         return new Vec3(
-            -(pixelX - this._centerX) * this.cellSize,
+             (pixelX - this._centerX) * this.cellSize,
             0,
              (pixelY - this._centerY) * this.cellSize
         );

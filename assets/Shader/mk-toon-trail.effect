@@ -1,0 +1,101 @@
+// MK Toon Trail — port từ builtin-particle-trail.effect
+// Thêm albedoColor + emissionColor để dễ tint material
+// Tương thích cc.Line và cc.ParticleSystem trail module
+
+CCEffect %{
+  temporaries:
+    b1: &b1
+      targets:
+      - blend: true
+        blendSrc: src_alpha
+        blendDst: one
+        blendSrcAlpha: src_alpha
+        blendDstAlpha: one
+    b2: &b2
+      targets:
+      - blend: true
+        blendSrc: src_alpha
+        blendDst: one_minus_src_alpha
+        blendSrcAlpha: src_alpha
+        blendDstAlpha: one_minus_src_alpha
+    d1: &d1 { depthTest: true, depthWrite: false }
+    r1: &r1 { cullMode: none }
+    p1: &p1
+      mainTexture:           { value: white, editor: { displayName: "Albedo Map" } }
+      emissionMap:           { value: black, editor: { displayName: "Emission Map" } }
+      mainTiling_Offset:     { value: [1.0, 1.0, 0.0, 0.0], editor: { displayName: "Tiling/Offset" } }
+      frameTile_velLenScale: { value: [1.0, 1.0, 0.0, 0.0], editor: { displayName: "FrameTile/Vel" } }
+      scale:                 { value: [1.0, 1.0, 1.0, 1.0], editor: { displayName: "Scale" } }
+      nodeRotation:          { value: [0.0, 0.0, 0.0, 1.0], editor: { displayName: "Node Rotation" } }
+      albedoColor:           { value: [1.0, 1.0, 1.0, 1.0], editor: { type: color, displayName: "Albedo Color" } }
+      emissionColor:         { value: [0.0, 0.0, 0.0, 1.0], editor: { type: color, displayName: "Emission Color" } }
+      emissionIntensity:     { value: 1.0, editor: { slide: true, range: [0.0, 8.0], step: 0.01, displayName: "Emission Intensity" } }
+      useVertexColorAlpha:   { value: 0.0, editor: { slide: true, range: [0.0, 1.0], step: 1.0, displayName: "Use Vertex Alpha (0/1)" } }
+
+  techniques:
+  - name: alpha-blend
+    passes:
+    - vert: builtin/internal/particle-trail:vs_main
+      frag: tinted-fs:frag
+      rasterizerState: *r1
+      depthStencilState: *d1
+      blendState: *b2
+      properties: *p1
+    - vert: builtin/internal/particle-trail:vs_main
+      frag: tinted-fs:frag
+      phase: deferred-forward
+      rasterizerState: *r1
+      depthStencilState: *d1
+      blendState: *b2
+      propertyIndex: 0
+
+  - name: add
+    passes:
+    - vert: builtin/internal/particle-trail:vs_main
+      frag: tinted-fs:frag
+      rasterizerState: *r1
+      depthStencilState: *d1
+      blendState: *b1
+      properties: *p1
+    - vert: builtin/internal/particle-trail:vs_main
+      frag: tinted-fs:frag
+      phase: deferred-forward
+      rasterizerState: *r1
+      depthStencilState: *d1
+      blendState: *b1
+      propertyIndex: 0
+}%
+
+CCProgram tinted-fs %{
+  precision mediump float;
+  #include <legacy/output>
+  #include <builtin/internal/embedded-alpha>
+
+  in vec2 uv;
+  in vec4 color;
+
+  uniform sampler2D mainTexture;
+  uniform sampler2D emissionMap;
+
+  uniform FragConstants {
+    vec4 albedoColor;
+    vec4 emissionColor;
+    float emissionIntensity;
+    float useVertexColorAlpha;
+  };
+
+  vec4 frag () {
+    vec4 tex = CCSampleWithAlphaSeparated(mainTexture, uv);
+    vec4 col = color * albedoColor * tex;
+
+    // useVertexColorAlpha=1 → giữ gradient alpha của cc.Line (mờ dần)
+    // useVertexColorAlpha=0 → ignore alpha vertex, dùng albedoColor.a × tex.a (đặc)
+    col.a = mix(albedoColor.a * tex.a, color.a * albedoColor.a * tex.a, useVertexColorAlpha);
+
+    // Emission: multiply với emissionMap (default black = no-op nếu không gán)
+    vec3 emission = emissionColor.rgb * texture(emissionMap, uv).rgb;
+    col.rgb += emission * emissionIntensity;
+
+    return CCFragOutput(col);
+  }
+}%

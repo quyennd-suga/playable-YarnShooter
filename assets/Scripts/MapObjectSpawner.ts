@@ -1,4 +1,4 @@
-import { _decorator, Component, Prefab, NodePool, instantiate, Node } from 'cc';
+import { _decorator, Component, Prefab, NodePool, instantiate, Node, Vec3 } from 'cc';
 const { ccclass, property } = _decorator;
 
 @ccclass('MapObjectSpawner')
@@ -12,6 +12,10 @@ export class MapObjectSpawner extends Component {
     @property(Prefab) public prefabPipe: Prefab = null;
     @property(Prefab) public prefabFrozen: Prefab = null;
     @property(Prefab) public prefabConnection: Prefab = null;
+    /** FX particle khi Mystery Bobbin reveal (port từ Unity MapObjectSpawner.prefabFxBobbin). */
+    @property(Prefab) public prefabFxBobbin: Prefab = null;
+    /** Thời gian sống của fxBobbin trước khi tự release về pool (tương đương PoolableParticle bên Unity). */
+    @property public fxBobbinLifetime: number = 1.5;
 
     private yarnPool: NodePool = new NodePool();
     private bobbinPool: NodePool = new NodePool();
@@ -20,6 +24,7 @@ export class MapObjectSpawner extends Component {
     private pipePool: NodePool = new NodePool();
     private frozenPool: NodePool = new NodePool();
     private connectionPool: NodePool = new NodePool();
+    private fxBobbinPool: NodePool = new NodePool();
 
     onLoad() {
         if (!MapObjectSpawner.instance) {
@@ -28,7 +33,7 @@ export class MapObjectSpawner extends Component {
             this.node.destroy();
             return;
         }
-        
+
         // Prewarm (khởi tạo sẵn) để tránh giật lag lúc đầu game
         this.prewarm(this.yarnPool, this.prefabYarn, 20);
         this.prewarm(this.bobbinPool, this.prefabBobbin, 20);
@@ -107,4 +112,21 @@ export class MapObjectSpawner extends Component {
         return node;
     }
     public releaseConnection(node: Node) { this.connectionPool.put(node); }
+
+    // --- FX BOBBIN (Mystery reveal vfx) ---
+    /** Port 1:1 từ Unity MapObjectSpawner.SpawnFxBobbin: lấy fx từ pool, đặt vị trí, play rồi tự release. */
+    public spawnFxBobbin(worldPos: Vec3): Node {
+        if (!this.prefabFxBobbin) return null;
+        const fx = this.getNodeFromPool(this.fxBobbinPool, this.prefabFxBobbin, "FxBobbin");
+        fx.setParent(this.node);
+        fx.setWorldPosition(worldPos);
+        fx.active = true;
+        this.scheduleOnce(() => {
+            if (fx && fx.isValid) {
+                fx.active = false;
+                this.fxBobbinPool.put(fx);
+            }
+        }, this.fxBobbinLifetime);
+        return fx;
+    }
 }

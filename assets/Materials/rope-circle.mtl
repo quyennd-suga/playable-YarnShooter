@@ -1,0 +1,66 @@
+{
+  "__type__": "cc.Material",
+  "_name": "",
+  "_objFlags": 0,
+  "__editorExtras__": {},
+  "_native": "",
+  "_effectAsset": {
+    "__uuid__": "18b927ce-2a5c-4456-a5bf-63a74773c9f6",
+    "__expectedType__": "cc.EffectAsset"
+  },
+  "_techIdx": 0,
+  "_defines": [
+    {}
+  ],
+  "_states": [
+    {
+      "rasterizerState": {},
+      "depthStencilState": {},
+      "blendState": {
+        "targets": [
+          {}
+        ]
+      }
+    }
+  ],
+  "_props": [
+    {
+      "tilingOffset": {
+        "__type__": "cc.Vec4",
+        "x": 1.5,
+        "y": 1.5,
+        "z": 0,
+        "w": 0
+      },
+      "colorA": {
+        "__type__": "cc.Color",
+        "r": 255,
+        "g": 77,
+        "b": 77,
+        "a": 255
+      },
+      "colorB": {
+        "__type__": "cc.Color",
+        "r": 143,
+        "g": 62,
+        "b": 62,
+        "a": 255
+      },
+      "stripeCount": 15,
+      "diagonalAmount": 2,
+      "edgeSoftness": 0,
+      "aoIntensity": 0,
+      "normalMapIntensity": 5,
+      "ambientStrength": 1,
+      "specularColor": {
+        "__type__": "cc.Color",
+        "r": 29,
+        "g": 29,
+        "b": 29,
+        "a": 255
+      },
+      "specularPower": 256,
+      "specularIntensity": 4
+    }
+  ]
+}
