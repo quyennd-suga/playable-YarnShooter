@@ -8,6 +8,7 @@ import { LevelManager } from './Core/LevelManager';
 import { GameManager } from './Core/GameManager';
 import { TrayManager } from './Core/TrayManager';
 import { Connection } from './Core/Connection';
+import { PixelData } from './Data/LevelInterfaces';
 
 const { ccclass, property } = _decorator;
 
@@ -37,15 +38,22 @@ export class MapGenerator extends Component {
 
         const data = this.levelData.json as LevelData;
 
-        // 1. Generate Above Layer (Yarns)
+        // 1. Generate Above Layer (Yarns + BobbinWalls)
         if (data.PixelImage && data.PixelImage.pixels) {
             const pixels = data.PixelImage.pixels;
             this.boardScaler.calculateCenter(pixels);
 
             const parent = this.aboveParent ?? this.node;
 
-            for (let i = 0; i < pixels.length; i++) {
-                const pixel = pixels[i];
+            // Port 1:1 từ Unity MapGenerator: pixel ở vị trí (x,y) có entry trong pixelHealths
+            // sẽ spawn BobbinWall thay cho Yarn — exclude khỏi vòng spawn yarn.
+            const healthSet = this._buildHealthPositionSet(data);
+            const yarnPixels = healthSet.size > 0
+                ? pixels.filter(p => !healthSet.has(this._pixelKey(p.x, p.y)))
+                : pixels;
+
+            for (let i = 0; i < yarnPixels.length; i++) {
+                const pixel = yarnPixels[i];
                 const node = MapObjectSpawner.instance.getYarn(parent);
 
                 const pos = this.boardScaler.getChildLocalPosition(pixel.x, pixel.y);
@@ -58,6 +66,11 @@ export class MapGenerator extends Component {
                     GameManager.instance?.registerYarn(yarnComp);
                 }
             }
+
+            // Build lookup (x,y) → PixelData để spawnBobbinWalls lấy areaX/areaY/material
+            const pixelLookup = new Map<string, PixelData>();
+            for (const p of pixels) pixelLookup.set(this._pixelKey(p.x, p.y), p);
+            this.spawnBobbinWalls(data, pixelLookup, parent);
 
             this.boardScaler.adjustScale();
         }
@@ -92,7 +105,10 @@ export class MapGenerator extends Component {
             const queue = queues[qIdx];
             if (!queue.shooters) continue;
 
-            const colX = startX + qIdx * this.bobbinColumnSpacing;
+            // Port 1:1 từ Unity MapGenerator: cột được mirror theo trục X (queues.Count - 1 - qIdx).
+            // Đây là convention level designer Unity đang dùng — nếu thấy lệch sau khi fix
+            // có thể revert lại `qIdx * spacing` để giữ layout cũ.
+            const colX = startX + (queues.length - 1 - qIdx) * this.bobbinColumnSpacing;
 
             for (let sIdx = 0; sIdx < queue.shooters.length; sIdx++) {
                 const shooter = queue.shooters[sIdx];
@@ -184,6 +200,44 @@ export class MapGenerator extends Component {
             // Frozen block bọc lấy bobbin, không thay thế
             let frozenNode = MapObjectSpawner.instance.getFrozen(bobbinNode);
             frozenNode.name = `Frozen_${iceData.IceBlockCount}HP`;
+        }
+    }
+
+    // ─── BobbinWall ──────────────────────────────────────────────────────────────
+
+    private _pixelKey(x: number, y: number): string { return `${x},${y}`; }
+
+    private _buildHealthPositionSet(data: LevelData): Set<string> {
+        const set = new Set<string>();
+        const healths = data.PixelImage?.pixelHealths;
+        if (healths) for (const ph of healths) set.add(this._pixelKey(ph.x, ph.y));
+        return set;
+    }
+
+    /** Port 1:1 từ Unity MapGenerator.SpawnBobbinWalls:
+     *  Mỗi PixelHealthData → 1 BobbinWall đặt tại pixel (x,y), lấy areaX/areaY/material
+     *  từ PixelData cùng (x,y), score = pixelHealth.health. */
+    private spawnBobbinWalls(data: LevelData, pixelLookup: Map<string, PixelData>, parent: Node): void {
+        const healths = data.PixelImage?.pixelHealths;
+        if (!healths || healths.length === 0) return;
+        const cellSize = this.boardScaler.cellSize;
+
+        for (const ph of healths) {
+            const pixel = pixelLookup.get(this._pixelKey(ph.x, ph.y));
+            if (!pixel) continue;
+            const wall = MapObjectSpawner.instance.getBobbinWall(parent);
+            if (!wall) continue;
+
+            const pos = this.boardScaler.getChildLocalPosition(pixel.x, pixel.y);
+            wall.node.setPosition(pos.x, pos.y, pos.z);
+            // Reset rotation/scale phòng trường hợp pool reuse mang theo state cũ
+            wall.node.setRotationFromEuler(0, 0, 0);
+            wall.node.setScale(1, 1, 1);
+
+            wall.material = pixel.material;
+            wall.score = ph.health;
+            const color = MaterialPalette.getMaterialById(pixel.material).color;
+            wall.setup(pixel.areaX ?? 1, pixel.areaY ?? 1, cellSize, color);
         }
     }
 

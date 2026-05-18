@@ -1,0 +1,78 @@
+{
+  "ver": "2.3.14",
+  "importer": "fbx",
+  "imported": true,
+  "uuid": "ab8e75ed-a376-4e50-a499-e11eb415ab91",
+  "files": [],
+  "subMetas": {
+    "40b15": {
+      "importer": "gltf-mesh",
+      "uuid": "ab8e75ed-a376-4e50-a499-e11eb415ab91@40b15",
+      "displayName": "",
+      "id": "40b15",
+      "name": "Scene.001.mesh",
+      "userData": {
+        "gltfIndex": 0,
+        "triangleCount": 368
+      },
+      "ver": "1.1.1",
+      "imported": true,
+      "files": [
+        ".bin",
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "f2a86": {
+      "importer": "gltf-scene",
+      "uuid": "ab8e75ed-a376-4e50-a499-e11eb415ab91@f2a86",
+      "displayName": "",
+      "id": "f2a86",
+      "name": "BobbinWallIChild.prefab",
+      "userData": {
+        "gltfIndex": 0
+      },
+      "ver": "1.0.14",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    }
+  },
+  "userData": {
+    "imageMetas": [],
+    "fbx": {
+      "smartMaterialEnabled": true
+    },
+    "lods": {
+      "enable": false,
+      "hasBuiltinLOD": false,
+      "options": [
+        {
+          "screenRatio": 0.25,
+          "faceCount": 1
+        },
+        {
+          "screenRatio": 0.125,
+          "faceCount": 0.25
+        },
+        {
+          "screenRatio": 0.01,
+          "faceCount": 0.1
+        }
+      ]
+    },
+    "assetFinder": {
+      "meshes": [
+        "ab8e75ed-a376-4e50-a499-e11eb415ab91@40b15"
+      ],
+      "skeletons": [],
+      "textures": [],
+      "materials": [],
+      "scenes": [
+        "ab8e75ed-a376-4e50-a499-e11eb415ab91@f2a86"
+      ]
+    }
+  }
+}

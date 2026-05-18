@@ -3,6 +3,7 @@ import { EventBus, GameEvents } from './EventBus';
 import { Bobbin } from '../Bobbin';
 import { SplineManager } from './SplineManager';
 import { QueueSlot } from '../QueueSlot';
+import { MapObjectSpawner } from '../MapObjectSpawner';
 
 const { ccclass, property } = _decorator;
 
@@ -72,7 +73,9 @@ export class QueueManager extends Component {
             if (bobbin.markedForCompletion) {
                 if (bobbin.node?.isValid) {
                     tween(bobbin.node).to(0.2, { scale: Vec3.ZERO })
-                        .call(() => { if (bobbin.node?.isValid) bobbin.node.destroy(); }).start();
+                        .call(() => {
+                            if (bobbin.node?.isValid) MapObjectSpawner.instance.releaseBobbin(bobbin.node);
+                        }).start();
                 }
                 return;
             }
@@ -94,6 +97,20 @@ export class QueueManager extends Component {
     /** True nếu bobbin đã đáp xuống bottom queue (port 1:1 từ Unity QueueManager.IsQueued). */
     public isQueued(bobbin: Bobbin): boolean {
         return this._queued.indexOf(bobbin) >= 0;
+    }
+
+    /** Port 1:1 từ Unity QueueManager.ForceReleaseSingle.
+     *  Tìm bobbin trong _queued, splice, release pool, repack. */
+    public forceReleaseSingle(bobbin: Bobbin): boolean {
+        const idx = this._queued.indexOf(bobbin);
+        if (idx < 0) return false;
+        this._queued.splice(idx, 1);
+        if (bobbin.node?.isValid) {
+            bobbin.node.setScale(Vec3.ZERO);
+            MapObjectSpawner.instance.releaseBobbin(bobbin.node);
+        }
+        this._repackQueue();
+        return true;
     }
 
     // ─── Private ─────────────────────────────────────────────────────────────────

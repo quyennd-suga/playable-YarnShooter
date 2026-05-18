@@ -3,6 +3,7 @@ import { EventBus, GameEvents } from './EventBus';
 import { Bobbin } from '../Bobbin';
 import { SplineManager } from './SplineManager';
 import { Connection } from './Connection';
+import { MapObjectSpawner } from '../MapObjectSpawner';
 
 const { ccclass, property } = _decorator;
 
@@ -26,6 +27,11 @@ export class LevelManager extends Component {
     private _rowBaseX: number[] = [];
     private _rowBaseZ: number[] = [];
     private _rowSpacing: number = 0.15;
+
+    /** Track tween shift đang chạy cho từng bobbin — để stop trước khi start tween mới.
+     *  Tránh race khi cluster checkout xoá nhiều member cùng row liên tiếp,
+     *  mỗi onBobbinLeave gọi _shiftRow → bobbin còn lại bị multiple tween chồng lên nhau. */
+    private _shiftTweens: Map<Bobbin, any> = new Map();
 
     onLoad() {
         if (!LevelManager.instance) { LevelManager.instance = this; }
@@ -116,6 +122,28 @@ export class LevelManager extends Component {
         return Number.MAX_SAFE_INTEGER;
     }
 
+    /** Port 1:1 từ Unity LevelManager.ForceReleaseSingleFromRowQueue.
+     *  Tìm bobbin trong _rowQueues, splice, release về pool, dồn các bobbin còn lại. */
+    public forceReleaseSingleFromRowQueue(bobbin: Bobbin): boolean {
+        for (let r = 0; r < this._rowQueues.length; r++) {
+            const idx = this._rowQueues[r].indexOf(bobbin);
+            if (idx < 0) continue;
+            this._rowQueues[r].splice(idx, 1);
+            bobbin.inQueueRow = false;
+            // Stop shift tween đang chạy trên bobbin trước khi pool — tránh tween còn
+            // viết position sau khi node đã được tái sử dụng cho instance khác.
+            const shift = this._shiftTweens.get(bobbin);
+            if (shift) { shift.stop(); this._shiftTweens.delete(bobbin); }
+            if (bobbin.node?.isValid) {
+                bobbin.node.setScale(Vec3.ZERO);
+                MapObjectSpawner.instance.releaseBobbin(bobbin.node);
+            }
+            this._shiftRow(r);
+            return true;
+        }
+        return false;
+    }
+
     // ─── Private ─────────────────────────────────────────────────────────────────
 
     private _onBobbinClicked(bobbin: Bobbin) {
@@ -160,9 +188,14 @@ export class LevelManager extends Component {
                 ctrlY,
                 (fromPos.z + targetPos.z) * 0.5
             );
+            // Stop previous shift tween nếu có — tránh chồng tween khi cluster
+            // checkout liên tiếp gọi _shiftRow nhiều lần trên cùng row.
+            const existing = this._shiftTweens.get(bobbin);
+            if (existing) existing.stop();
+
             const temp = { r: 0 };
             const tmp = new Vec3();
-            tween(temp)
+            const tw = tween(temp)
                 .to(this.queueShiftDuration, { r: 1 }, {
                     onUpdate: () => {
                         if (!bobbin.node?.isValid) return;
@@ -179,8 +212,10 @@ export class LevelManager extends Component {
                     if (!bobbin.node?.isValid) return;
                     bobbin.node.setPosition(targetPos);
                     bobbin.updateOriginPos();
+                    if (this._shiftTweens.get(bobbin) === tw) this._shiftTweens.delete(bobbin);
                 })
                 .start();
+            this._shiftTweens.set(bobbin, tw);
         }
     }
 

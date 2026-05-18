@@ -7,6 +7,7 @@ import { Connection } from './Core/Connection';
 import { SplineManager } from './Core/SplineManager';
 import { LevelManager } from './Core/LevelManager';
 import { TrayManager } from './Core/TrayManager';
+import { BobbinWall } from './BobbinWall';
 const { ccclass, property } = _decorator;
 
 @ccclass('Bobbin')
@@ -138,7 +139,9 @@ export class Bobbin extends Component {
 
         // Port 1:1 từ Unity SetBobbinState:355 — khi đi vào inactive, dời center hơi xuống
         // để rope cylinder của Connection nối đúng phần body bobbin trong queue.
-        if (!active && this.center) {
+        // CHỈ áp dụng khi bobbin còn trong queue row; ngoài queue (bay/belt/overflow)
+        // không được dời center nữa vì sẽ làm rope lệch khi cluster checkout.
+        if (!active && this.center && this.inQueueRow) {
             this.center.setPosition(0, -0.1, 0);
         }
 
@@ -269,6 +272,30 @@ export class Bobbin extends Component {
         EventBus.emit(GameEvents.ON_BOBBIN_CLICKED, this);
     }
 
+    /** Port 1:1 từ Unity Bobbin.HandleBobbinWallHit.
+     *  Trả về true nếu hit hợp lệ (material match + còn HP wall + còn ammo bobbin) → SplineManager
+     *  sẽ setup rope/anchor. Trả về false nếu mismatch hoặc dead → raycast bị "block" tại wall.
+     *  Damage logic: trừ 1 ammo bobbin + 1 HP wall, hết HP → splashAndRelease, chưa hết → punch. */
+    public handleBobbinWallHit(wall: BobbinWall): boolean {
+        if (!this.data || this.data.ammo <= 0) return false;
+        if (!wall) return false;
+        if (wall.material !== this.data.material) return false;
+        if (wall.score <= 0) return false;
+
+        // Match Unity: score-- trên bobbin (ammo) + wall.score-- (HP)
+        this.decrementAmmo();
+        wall.score = wall.score - 1;
+
+        if (wall.score <= 0) {
+            wall.splashAndRelease(() => {
+                if (wall?.node?.isValid) MapObjectSpawner.instance.releaseBobbinWall(wall);
+            });
+        } else {
+            wall.punch();
+        }
+        return true;
+    }
+
     /** Bobbin này có thể tham gia checkout trong connection không?
      *  True nếu đang ở đầu hàng, hoặc tất cả bobbin đứng trước trong hàng đều cùng connection.
      *  (Port 1:1 từ Unity Bobbin.IsEffectivelyActiveForConnection). */
@@ -280,6 +307,51 @@ export class Bobbin extends Component {
 
     public updateOriginPos() {
         this._originPos.set(this.node.position);
+    }
+
+    /** Reset toàn bộ runtime state về mặc định trước khi trả về pool.
+     *  Port 1:1 từ Unity Bobbin.ResetState — bắt buộc gọi qua MapObjectSpawner.releaseBobbin
+     *  để tránh state leak (connection/isCheckedOut/pendingConnectionComplete...) giữa các lần dùng. */
+    public resetState(): void {
+        Tween.stopAllByTarget(this.node);
+        this.unscheduleAllCallbacks();
+
+        // Flags
+        this.isActive = false;
+        this.inQueueRow = false;
+        this.inOverflow = false;
+        this.isCheckedOut = false;
+        this.pendingConnectionComplete = false;
+        this.markedForCompletion = false;
+        this.connection = null;
+        this.frozenMechanic = null;
+        this.data = null;
+
+        // Transform
+        this.node.setScale(Vec3.ONE);
+        this.node.setRotation(Quat.IDENTITY);
+
+        // Visuals về trạng thái inactive default (giống Unity ResetState)
+        if (this.activeVisual) this.activeVisual.active = false;
+        if (this.inactiveVisual) this.inactiveVisual.active = true;
+        if (this.score1) this.score1.node.active = false;
+        if (this.score2) this.score2.node.active = false;
+        if (this.score3) this.score3.node.active = true;
+        if (this.mystery) this.mystery.active = false;
+
+        // Tắt hết ring (giống Unity ResetState)
+        if (this.ropeCircle) {
+            for (let i = 0; i < this.ropeCircle.children.length; i++) {
+                this.ropeCircle.children[i].active = false;
+            }
+        }
+
+        // Score
+        this._initialScore = 0;
+        this._score2WorldRotLock = null;
+
+        // Center về vị trí inactive (giống Unity ResetState:288)
+        if (this.center) this.center.setPosition(0, -0.1, 0);
     }
 
     public shake() {

@@ -1027,7 +1027,7 @@
     "_enabled": true,
     "__prefab": null,
     "levelData": {
-      "__uuid__": "bca7828e-a425-4c21-aaea-c760bf7dfed6",
+      "__uuid__": "7ea4a18c-38e4-4d4f-91da-d7dad7d25db0",
       "__expectedType__": "cc.JsonAsset"
     },
     "aboveParent": {
@@ -1093,6 +1093,22 @@
     },
     "prefabFxBobbin": null,
     "fxBobbinLifetime": 1.5,
+    "prefabBobbinWall": {
+      "__uuid__": "05808258-93c5-4a44-83a7-1dd9e5117496",
+      "__expectedType__": "cc.Prefab"
+    },
+    "prefabBobbinWallChild": {
+      "__uuid__": "9ae0d3a4-349f-4b9a-b6ec-ba410d8f9efe",
+      "__expectedType__": "cc.Prefab"
+    },
+    "prefabBobbinWallGoc": {
+      "__uuid__": "32c02097-77ed-49b6-9c88-5db0cd9816fe",
+      "__expectedType__": "cc.Prefab"
+    },
+    "prefabBobbinWallCanh": {
+      "__uuid__": "3d5f52de-5e23-47ff-9626-c2d89c696ab9",
+      "__expectedType__": "cc.Prefab"
+    },
     "_id": "4c3nx2c2VK4KlnwldJyJZ3"
   },
   {
@@ -4377,11 +4393,13 @@
   },
   {
     "__type__": "cc.PrefabInfo",
-    "root": null,
+    "root": {
+      "__id__": 1
+    },
     "asset": null,
     "fileId": "272843ca-628f-4932-8b93-fb7df177864f",
     "instance": null,
-    "targetOverrides": []
+    "targetOverrides": null
   },
   {
     "__type__": "cc.SceneGlobals",

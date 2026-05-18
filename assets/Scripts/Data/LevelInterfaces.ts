@@ -61,9 +61,18 @@ export interface PipeShooterData {
     Pipes: { ShooterId: number, ColorIndex: number }[];
 }
 
+/** Port 1:1 từ Unity PixelHealthData — đánh dấu pixel ở (x,y) là BobbinWall với HP=health.
+ *  BobbinWall sẽ lấy areaX/areaY/material từ PixelData tại cùng (x,y) trong pixels[]. */
+export interface PixelHealthData {
+    x: number;
+    y: number;
+    health: number;
+}
+
 export interface PixelImage {
     pixels: PixelData[];
-    // TODO: Add healths, gates, keys, scarves etc. when needed
+    pixelHealths?: PixelHealthData[];
+    // TODO: Add gates, keys, scarves etc. when needed
 }
 
 export interface LevelData {

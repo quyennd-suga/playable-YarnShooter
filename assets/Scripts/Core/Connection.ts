@@ -1,4 +1,4 @@
-import { _decorator, Component, Color, tween, Vec3 } from 'cc';
+import { _decorator, Component, Color, Vec3 } from 'cc';
 import { Bobbin } from '../Bobbin';
 import { ConnectionChild } from '../ConnectionChild';
 import { MapObjectSpawner } from '../MapObjectSpawner';
@@ -7,6 +7,7 @@ import { SplineManager } from './SplineManager';
 import { LevelManager } from './LevelManager';
 import { QueueManager } from './QueueManager';
 import { OverflowQueue } from './OverflowQueue';
+import { TrayManager } from './TrayManager';
 
 const { ccclass, property } = _decorator;
 
@@ -91,11 +92,17 @@ export class Connection extends Component {
         return true;
     }
 
-    /** True nếu tất cả members đều effectively active VÀ belt còn đủ slot cho cả nhóm. */
+    /** True nếu tất cả members đều effectively active VÀ belt còn đủ slot cho cả nhóm
+     *  VÀ TrayManager còn đủ tray rảnh (tránh partial checkout khi tray đang return). */
     public canCheckout(): boolean {
         const sm = SplineManager.instance;
         if (!sm) return false;
         if (sm.availableSlots < this.members.length) return false;
+        // Port từ Unity OnClick: HasAvailableTray check → ở đây mở rộng cho cluster
+        // bằng cách yêu cầu đủ tray cho tất cả member, tránh member đầu lấy được tray
+        // nhưng member sau shake vì tray cuối đang bay về (_returningCount).
+        const tm = TrayManager.instance;
+        if (!tm || tm.availableTrayCount < this.members.length) return false;
         for (const b of this.members) {
             if (b.isCheckedOut) return false;
             if (!b.isEffectivelyActiveForConnection(this)) return false;
@@ -118,7 +125,10 @@ export class Connection extends Component {
         }
     }
 
-    /** Checkout 1 member trong cluster — bypass active-state check (đã được CanCheckout đảm bảo). */
+    /** Checkout 1 member trong cluster — bypass active-state check (đã được CanCheckout đảm bảo).
+     *  Port 1:1 từ Unity Bobbin.TryCheckout:197-217:
+     *    isCheckedOut=true → onBobbinLeave (queue/overflow/queueManager) → center=(0,0,0) → fly.
+     *  KHÔNG gọi setActiveState(false) — Unity giữ _isActive nguyên (bobbin trên belt vẫn active). */
     private _tryCheckoutMember(b: Bobbin): void {
         if (b.isCheckedOut) return;
         b.isCheckedOut = true;
@@ -131,7 +141,9 @@ export class Connection extends Component {
         } else {
             QueueManager.instance?.onBobbinLeave(b);
         }
-        b.setActiveState(false);
+        // Port Unity TryCheckout:213 — reset center về origin trước khi fly,
+        // tránh offset -0.1 (do setActiveState(false) trước đây trên queue) làm rope lệch.
+        if (b.center) b.center.setPosition(0, 0, 0);
         EventBus.emit(GameEvents.ON_BOBBIN_CHECKOUT, b);
     }
 
@@ -201,11 +213,18 @@ export class Connection extends Component {
         }
     }
 
+    /** Port 1:1 từ Unity Connection.ForceReleaseBobbin — chain priority:
+     *  SplineManager (đang bay/trên belt) → QueueManager (bottom queue) →
+     *  OverflowQueue → LevelManager (grid queue). Mỗi manager tự cleanup state nội bộ
+     *  + dồn hàng + release pool. Fallback: release thẳng nếu không match container nào. */
     private static _forceReleaseBobbin(b: Bobbin): void {
         if (!b?.node?.isValid) return;
-        tween(b.node).to(0.15, { scale: Vec3.ZERO }).call(() => {
-            if (b.node?.isValid) b.node.destroy();
-        }).start();
+        if (SplineManager.instance?.forceReleaseSingle(b)) return;
+        if (QueueManager.instance?.forceReleaseSingle(b)) return;
+        if (OverflowQueue.instance?.forceReleaseSingle(b)) return;
+        if (LevelManager.instance?.forceReleaseSingleFromRowQueue(b)) return;
+        b.node.setScale(Vec3.ZERO);
+        MapObjectSpawner.instance.releaseBobbin(b.node);
     }
 
     // ─── Pool Reset ───────────────────────────────────────────────────────────────

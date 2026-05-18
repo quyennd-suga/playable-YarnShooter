@@ -3,6 +3,7 @@ import { EventBus, GameEvents } from './EventBus';
 import { Bobbin } from '../Bobbin';
 import { SplineManager } from './SplineManager';
 import { QueueManager } from './QueueManager';
+import { MapObjectSpawner } from '../MapObjectSpawner';
 
 const { ccclass, property } = _decorator;
 
@@ -77,6 +78,24 @@ export class OverflowQueue extends Component {
         }
         const idx = this._bobbins.indexOf(bobbin);
         if (idx !== -1) this._bobbins.splice(idx, 1);
+    }
+
+    /** Port 1:1 từ Unity OverflowQueue.ForceReleaseSingle.
+     *  Tìm bobbin trong _bobbins, giải phóng slot, release về pool. */
+    public forceReleaseSingle(bobbin: Bobbin): boolean {
+        const idx = this._bobbins.indexOf(bobbin);
+        if (idx < 0) return false;
+        const slotIdx = this._bobbinSlotMap.get(bobbin);
+        if (slotIdx !== undefined) {
+            this._occupiedSlots[slotIdx] = false;
+            this._bobbinSlotMap.delete(bobbin);
+        }
+        this._bobbins.splice(idx, 1);
+        if (bobbin.node?.isValid) {
+            bobbin.node.setScale(Vec3.ZERO);
+            MapObjectSpawner.instance.releaseBobbin(bobbin.node);
+        }
+        return true;
     }
 
     public resetForNewLevel() {

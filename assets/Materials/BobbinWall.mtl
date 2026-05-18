@@ -1,0 +1,59 @@
+{
+  "__type__": "cc.Material",
+  "_name": "",
+  "_objFlags": 0,
+  "__editorExtras__": {},
+  "_native": "",
+  "_effectAsset": {
+    "__uuid__": "9fe15f26-81be-4610-928a-6794b03a3483",
+    "__expectedType__": "cc.EffectAsset"
+  },
+  "_techIdx": 0,
+  "_defines": [
+    {
+      "USE_ALBEDO_MAP": true
+    },
+    {}
+  ],
+  "_states": [
+    {
+      "rasterizerState": {},
+      "depthStencilState": {},
+      "blendState": {
+        "targets": [
+          {}
+        ]
+      }
+    },
+    {
+      "rasterizerState": {},
+      "depthStencilState": {},
+      "blendState": {
+        "targets": [
+          {}
+        ]
+      }
+    }
+  ],
+  "_props": [
+    {
+      "albedoMap": {
+        "__uuid__": "65a5e545-cd7f-4ae3-87ba-7533672bcd37@6c48a",
+        "__expectedType__": "cc.Texture2D"
+      },
+      "smoothness": 1,
+      "specularIntensity": 0.04,
+      "normalMap": {
+        "__uuid__": "65a5e545-cd7f-4ae3-87ba-7533672bcd37@6c48a",
+        "__expectedType__": "cc.Texture2D"
+      },
+      "diffuseSmoothness": 1,
+      "diffuseThresholdOffset": 0,
+      "lightBands": 12,
+      "lightBandsScale": 0.463,
+      "specularSmoothness": 0.322,
+      "specularThresholdOffset": 0
+    },
+    {}
+  ]
+}

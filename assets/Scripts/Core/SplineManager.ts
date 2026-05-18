@@ -10,6 +10,8 @@ import { TrayManager } from './TrayManager';
 import { Tray } from '../Tray';
 import { Connection } from './Connection';
 import { MapObjectSpawner } from '../MapObjectSpawner';
+import { BobbinWall } from '../BobbinWall';
+import { BobbinWallChild } from '../BobbinWallChild';
 
 const { ccclass, property } = _decorator;
 
@@ -165,6 +167,42 @@ export class SplineManager extends Component {
         return this.maxTrays - (this._activeMovers.length + this._checkoutQueue.length);
     }
 
+    /** Port 1:1 từ Unity SplineManager.ForceReleaseSingle.
+     *  Tìm bobbin trong _activeMovers HOẶC _checkoutQueue, dọn rope/tray rồi release pool. */
+    public forceReleaseSingle(bobbin: Bobbin): boolean {
+        // 1. _activeMovers
+        for (let i = this._activeMovers.length - 1; i >= 0; i--) {
+            const m = this._activeMovers[i];
+            if (m.bobbin !== bobbin) continue;
+            if (m.activeRope?.node?.isValid) {
+                m.activeRope.node.destroy();
+                m.activeRope = null;
+            }
+            this._activeMovers.splice(i, 1);
+            if (m.tray) TrayManager.instance?.returnTray(m.tray, false);
+            if (bobbin.node?.isValid) {
+                bobbin.node.setScale(Vec3.ZERO);
+                MapObjectSpawner.instance.releaseBobbin(bobbin.node);
+            }
+            return true;
+        }
+        // 2. _checkoutQueue (đang bay/staging)
+        for (let i = this._checkoutQueue.length - 1; i >= 0; i--) {
+            const p = this._checkoutQueue[i];
+            if (p.bobbin !== bobbin) continue;
+            if (p.useQueueTray && p.queueTraySlot >= 0)
+                this._queueTrayOccupied[p.queueTraySlot] = false;
+            if (p.tray) TrayManager.instance?.returnTray(p.tray, false);
+            this._checkoutQueue.splice(i, 1);
+            if (bobbin.node?.isValid) {
+                bobbin.node.setScale(Vec3.ZERO);
+                MapObjectSpawner.instance.releaseBobbin(bobbin.node);
+            }
+            return true;
+        }
+        return false;
+    }
+
     private _hasBeltSpacing(): boolean {
         if (this._activeMovers.length >= this.maxTrays) return false;
         if (this._activeMovers.length > 0) {
@@ -211,8 +249,17 @@ export class SplineManager extends Component {
             Quat.multiply(targetRot, steerRot, trayBaseRot);
         }
 
-        // Giống Unity BeginCheckoutFly: kiểm tra có chỗ trên belt không
-        const hasClearance = this._hasBeltSpacing() && this._lastExpectedBeltEntryTime <= Date.now() / 1000;
+        // Giống Unity BeginCheckoutFly: kiểm tra có chỗ trên belt không.
+        // QUAN TRỌNG: dùng structural check `_checkoutQueue.length === 0` thay vì wall-clock
+        // `_lastExpectedBeltEntryTime <= Date.now()/1000`. Lý do: có 1 cửa sổ race giữa
+        // moment bobbin A finish flying (bobbinFlyDone=true) và lúc processCheckoutQueue
+        // dời A từ _checkoutQueue sang _activeMovers. Trong cửa sổ đó:
+        //   - _activeMovers rỗng → _hasBeltSpacing = true
+        //   - wall clock đã vượt _lastExpectedBeltEntryTime → wall-clock check pass
+        //   - hasClearance = true → bobbin B sẽ đi thẳng tới startTray
+        //   - Tray A và Tray B cùng đến startTray → chồng lên nhau (bug user báo).
+        // Structural check đảm bảo B chỉ đi thẳng khi không còn ai đang pending trên đường.
+        const hasClearance = this._checkoutQueue.length === 0 && this._hasBeltSpacing();
         const slotIdx = hasClearance ? -1 : this._findFreeQueueTraySlot();
 
         if (!hasClearance && slotIdx < 0) {
@@ -572,8 +619,32 @@ export class SplineManager extends Component {
 
             for (let res of results) {
                 let hitNode = res.collider.node;
-                let yarn = hitNode.getComponent(Yarn);
 
+                // BobbinWall priority — port 1:1 từ Unity SplineManager.FireYarnRaycast layer branch.
+                // BobbinWallChild có thể nằm sâu trong hierarchy (child của center node của wall).
+                let wallChild = hitNode.getComponent(BobbinWallChild);
+                let parent = hitNode.parent;
+                while (!wallChild && parent) {
+                    wallChild = parent.getComponent(BobbinWallChild);
+                    parent = parent.parent;
+                }
+                if (wallChild) {
+                    // Tìm BobbinWall ancestor
+                    let wall: BobbinWall | null = null;
+                    let p2 = wallChild.node.parent;
+                    while (!wall && p2) {
+                        wall = p2.getComponent(BobbinWall);
+                        p2 = p2.parent;
+                    }
+                    if (wall && mover.bobbin.handleBobbinWallHit(wall)) {
+                        this.handleBobbinWallRopeAndAnchor(mover, wall, res.collider);
+                        didHit = true;
+                    }
+                    // Material mismatch hoặc wall đã chết → block raycast (Unity: single-hit raycast dừng tại đây).
+                    break;
+                }
+
+                let yarn = hitNode.getComponent(Yarn);
                 let p = hitNode.parent;
                 while (!yarn && p) {
                     yarn = p.getComponent(Yarn);
@@ -657,6 +728,59 @@ export class SplineManager extends Component {
         }
     }
 
+    /** Port từ Unity SplineManager.FireYarnRaycast nhánh BobbinWall:
+     *  Bobbin.handleBobbinWallHit đã decrement ammo + damage wall + punch/splash.
+     *  Hàm này chỉ chịu trách nhiệm anchor/rope/nextFirePos (cùng pattern handleYarnHit)
+     *  và check completion khi ammo về 0. */
+    private handleBobbinWallRopeAndAnchor(mover: TrayMover, wall: BobbinWall, collider: import('cc').Collider) {
+        mover.ropeReleaseTimer = 0;
+        mover.hasAnchor = true;
+
+        let cellSize = 1.0;
+        if (collider && collider.worldBounds) {
+            const he = collider.worldBounds.halfExtents;
+            cellSize = Math.max(he.x, he.z) * 2.0;
+        }
+
+        // Rope target = wall center (hoặc node) — match cách Yarn dùng yarn.node.worldPosition
+        const wallTarget = (wall.center ?? wall.node).worldPosition;
+
+        const nextPos = new Vec3();
+        Vec3.scaleAndAdd(nextPos, wallTarget, mover.lastSnapDir, cellSize);
+        mover.nextFirePos = nextPos;
+
+        const tPos = wallTarget.clone();
+        tPos.y += this.raycastYOffset;
+
+        if (!mover.activeRope && this.ropePrefab) {
+            const ropeNode = instantiate(this.ropePrefab);
+            this.node.addChild(ropeNode);
+            mover.activeRope = ropeNode.getComponent(RopeSimulator) || ropeNode.addComponent(RopeSimulator);
+            mover.activeRope.pointA = mover.bobbin.node;
+            mover.activeRope.targetPos = tPos;
+            mover.activeRope.setColor(mover.bobbin.currentColor);
+            mover.activeRope.forceRefresh();
+        } else if (mover.activeRope) {
+            mover.activeRope.targetPos = tPos;
+        }
+
+        if (mover.bobbin.data.ammo <= 0) {
+            if (!mover.bobbin.connection) {
+                this.handleBobbinCompleteOnBelt(mover);
+            } else {
+                mover.bobbin.pendingConnectionComplete = true;
+                if (mover.activeRope) {
+                    const rope = mover.activeRope;
+                    mover.activeRope = null;
+                    this.scheduleOnce(() => { if (rope?.node?.isValid) rope.node.destroy(); }, 0.1);
+                }
+                if (mover.bobbin.connection.allMembersPendingComplete()) {
+                    this.handleConnectionCompleteOnBelt(mover.bobbin.connection);
+                }
+            }
+        }
+    }
+
     /** Hoàn thành toàn bộ bobbin trong một connection cùng lúc.
      *  Port 1:1 từ Unity SplineManager.HandleConnectionCompleteOnBelt. */
     private handleConnectionCompleteOnBelt(conn: Connection): void {
@@ -699,7 +823,9 @@ export class SplineManager extends Component {
     private _playCompletionAndRelease(bobbin: Bobbin): void {
         if (!bobbin?.node?.isValid) return;
         tween(bobbin.node).to(0.2, { scale: Vec3.ZERO })
-            .call(() => { if (bobbin.node?.isValid) bobbin.node.destroy(); }).start();
+            .call(() => {
+                if (bobbin.node?.isValid) MapObjectSpawner.instance.releaseBobbin(bobbin.node);
+            }).start();
     }
 
     private handleBobbinCompleteOnBelt(mover: TrayMover) {
@@ -721,10 +847,11 @@ export class SplineManager extends Component {
         }
 
         if (mover.bobbin) {
-            tween(mover.bobbin.node)
+            const b = mover.bobbin;
+            tween(b.node)
                 .to(0.2, { scale: Vec3.ZERO })
                 .call(() => {
-                    mover.bobbin.node.destroy();
+                    if (b.node?.isValid) MapObjectSpawner.instance.releaseBobbin(b.node);
                 })
                 .start();
         }
@@ -780,7 +907,9 @@ export class SplineManager extends Component {
                 OverflowQueue.instance.addBobbin(bobbin);
             } else {
                 console.warn("[SplineManager] Game Over! Tất cả queue đầy!");
-                tween(bobbin.node).to(0.2, { scale: Vec3.ZERO }).call(() => bobbin.node.destroy()).start();
+                tween(bobbin.node).to(0.2, { scale: Vec3.ZERO }).call(() => {
+                    if (bobbin.node?.isValid) MapObjectSpawner.instance.releaseBobbin(bobbin.node);
+                }).start();
             }
         }
     }
