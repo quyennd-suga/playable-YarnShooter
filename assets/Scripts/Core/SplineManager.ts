@@ -8,6 +8,8 @@ import { RopeSimulator } from './RopeSimulator';
 import { SplineCustom } from './SplineCustom';
 import { TrayManager } from './TrayManager';
 import { Tray } from '../Tray';
+import { Connection } from './Connection';
+import { MapObjectSpawner } from '../MapObjectSpawner';
 
 const { ccclass, property } = _decorator;
 
@@ -157,6 +159,12 @@ export class SplineManager extends Component {
         return this._hasBeltSpacing() || this._findFreeQueueTraySlot() >= 0;
     }
 
+    /** Số slot còn lại cho checkout (port 1:1 từ Unity SplineManager.AvailableSlots).
+     *  Connection.canCheckout dùng để check belt đủ chỗ cho cả cluster. */
+    public get availableSlots(): number {
+        return this.maxTrays - (this._activeMovers.length + this._checkoutQueue.length);
+    }
+
     private _hasBeltSpacing(): boolean {
         if (this._activeMovers.length >= this.maxTrays) return false;
         if (this._activeMovers.length > 0) {
@@ -170,6 +178,14 @@ export class SplineManager extends Component {
         if (!this.startBobbin || !this.startTray || !this.spline || this.spline.wps.length < 2) {
             bobbin.shake();
             return;
+        }
+
+        // Port 1:1 từ Unity Bobbin.TryCheckout:213 — reset center về origin khi rời queue lên belt.
+        // Lý do: trong queue setActiveState(false) dời center xuống -0.1 (để rope nối ở body bobbin).
+        // Khi lên belt, bobbin nằm ngang → offset -0.1 trên local Y trở thành lệch ngang theo world,
+        // khiến rope cylinder bị bobbin che mất 1 nửa. Set về (0,0,0) để khử offset này.
+        if (bobbin.center) {
+            bobbin.center.setPosition(0, 0, 0);
         }
 
         // Ẩn score1 ngay khi bắt đầu bay checkout
@@ -421,9 +437,14 @@ export class SplineManager extends Component {
         let step = this.spline.speed * dt;
 
         for (let i = this._activeMovers.length - 1; i >= 0; i--) {
+            // Port 1:1 từ Unity SplineManager.Update:277 — handleConnectionCompleteOnBelt
+            // có thể remove nhiều mover cùng lúc (toàn cluster), khiến i vượt array length.
+            if (i >= this._activeMovers.length) break;
             let mover = this._activeMovers[i];
+            if (!mover) break;
 
-            if (!mover.bobbin || !mover.bobbin.isValid || mover.bobbin.data.ammo <= 0) {
+            // Mover không còn bobbin hợp lệ — dọn dẹp.
+            if (!mover.bobbin || !mover.bobbin.isValid) {
                 this.handleBobbinCompleteOnBelt(mover);
                 continue;
             }
@@ -488,6 +509,17 @@ export class SplineManager extends Component {
             if (mover.bobbin && mover.bobbin.node && mover.bobbin.node.isValid) {
                 // Chỉ căn score2 đứng đúng dựa vào rotation Y của tray (giống Unity KeepScore2Upright)
                 mover.bobbin.keepScore2Upright(mover.tray.node);
+            }
+
+            // Port 1:1 từ Unity SplineManager.Update — sau khi đã update vị trí,
+            // nếu bobbin đang chờ connection complete:
+            //   - connection bị clear (SuperBobbin purge) → complete ngay
+            //   - connection còn → skip yarn firing, bobbin tiếp tục chạy trên belt
+            if (mover.bobbin.pendingConnectionComplete) {
+                if (!mover.bobbin.connection) {
+                    this.handleBobbinCompleteOnBelt(mover);
+                }
+                continue;
             }
 
             // Origin của tia bắn: ưu tiên bobbin.shoot (giống Unity), fallback về vị trí Tray
@@ -607,8 +639,67 @@ export class SplineManager extends Component {
         yarn.despawn(() => yarn.node.destroy());
 
         if (mover.bobbin.data.ammo <= 0) {
-            this.handleBobbinCompleteOnBelt(mover);
+            // Port 1:1 từ Unity SplineManager.OnBobbinScoreZero
+            if (!mover.bobbin.connection) {
+                this.handleBobbinCompleteOnBelt(mover);
+            } else {
+                mover.bobbin.pendingConnectionComplete = true;
+                // Release rope (đã bắn xong, không cần kéo)
+                if (mover.activeRope) {
+                    const rope = mover.activeRope;
+                    mover.activeRope = null;
+                    this.scheduleOnce(() => { if (rope?.node?.isValid) rope.node.destroy(); }, 0.1);
+                }
+                if (mover.bobbin.connection.allMembersPendingComplete()) {
+                    this.handleConnectionCompleteOnBelt(mover.bobbin.connection);
+                }
+            }
         }
+    }
+
+    /** Hoàn thành toàn bộ bobbin trong một connection cùng lúc.
+     *  Port 1:1 từ Unity SplineManager.HandleConnectionCompleteOnBelt. */
+    private handleConnectionCompleteOnBelt(conn: Connection): void {
+        // Loop 1: bobbin đang trên belt → complete qua TrayMover
+        const toComplete: TrayMover[] = [];
+        for (const m of this._activeMovers) {
+            if (m.bobbin && (conn.members.indexOf(m.bobbin) >= 0 || m.bobbin.connection === conn)) {
+                toComplete.push(m);
+            }
+        }
+        for (const m of toComplete) this.handleBobbinCompleteOnBelt(m);
+        let anyCompleted = toComplete.length > 0;
+
+        // Loop 2: bobbin đã ở hàng chờ hoặc đang bay về → complete trực tiếp / mark for completion
+        const snapshot = conn.members.slice();
+        for (const bobbin of snapshot) {
+            if (!bobbin.pendingConnectionComplete) continue;
+            // Bỏ qua bobbin đã được xử lý ở loop 1
+            let alreadyHandled = false;
+            for (const m of toComplete) if (m.bobbin === bobbin) { alreadyHandled = true; break; }
+            if (alreadyHandled) continue;
+
+            if (QueueManager.instance?.isQueued(bobbin)) {
+                // Đã đáp xuống bottom queue — xóa khỏi queue và complete ngay
+                QueueManager.instance.onBobbinLeave(bobbin);
+                this._playCompletionAndRelease(bobbin);
+            } else {
+                // Đang bay về queue — đánh dấu, complete khi đáp
+                bobbin.markedForCompletion = true;
+            }
+            anyCompleted = true;
+        }
+
+        // Port 1:1 từ Unity: release Connection (kéo theo release tất cả ConnectionChild rope)
+        if (anyCompleted && conn?.node?.isValid) {
+            MapObjectSpawner.instance.releaseConnection(conn.node);
+        }
+    }
+
+    private _playCompletionAndRelease(bobbin: Bobbin): void {
+        if (!bobbin?.node?.isValid) return;
+        tween(bobbin.node).to(0.2, { scale: Vec3.ZERO })
+            .call(() => { if (bobbin.node?.isValid) bobbin.node.destroy(); }).start();
     }
 
     private handleBobbinCompleteOnBelt(mover: TrayMover) {
@@ -663,14 +754,33 @@ export class SplineManager extends Component {
             mover.tray = null;
         }
 
+        const bobbin = mover.bobbin;
+        if (!bobbin) return;
+
+        // Port 1:1 từ Unity SplineManager.CompleteMoverEnd — nhánh PendingConnectionComplete
+        if (bobbin.pendingConnectionComplete) {
+            if (bobbin.connection && bobbin.connection.allMembersPendingComplete()) {
+                this.handleConnectionCompleteOnBelt(bobbin.connection);
+                // handleConnectionCompleteOnBelt đã set markedForCompletion cho các member còn bay
+                // → tryReturn vẫn cần gọi để bobbin này bay về queue rồi mới complete (giữ animation)
+                if (bobbin.markedForCompletion) {
+                    QueueManager.instance.tryReturn(bobbin);
+                }
+            } else {
+                // Chờ các member khác hoàn thành — về hàng chờ như bình thường
+                QueueManager.instance.tryReturn(bobbin);
+            }
+            return;
+        }
+
         // Thử trả về BottomQueue trước, nếu đầy thì thử OverflowQueue (giống Unity CompleteMoverEnd)
-        const returned = QueueManager.instance.tryReturn(mover.bobbin);
+        const returned = QueueManager.instance.tryReturn(bobbin);
         if (!returned) {
             if (OverflowQueue.instance?.hasSpace) {
-                OverflowQueue.instance.addBobbin(mover.bobbin);
+                OverflowQueue.instance.addBobbin(bobbin);
             } else {
                 console.warn("[SplineManager] Game Over! Tất cả queue đầy!");
-                tween(mover.bobbin.node).to(0.2, { scale: Vec3.ZERO }).call(() => mover.bobbin.node.destroy()).start();
+                tween(bobbin.node).to(0.2, { scale: Vec3.ZERO }).call(() => bobbin.node.destroy()).start();
             }
         }
     }

@@ -7,6 +7,7 @@ import { MapObjectSpawner } from './MapObjectSpawner';
 import { LevelManager } from './Core/LevelManager';
 import { GameManager } from './Core/GameManager';
 import { TrayManager } from './Core/TrayManager';
+import { Connection } from './Core/Connection';
 
 const { ccclass, property } = _decorator;
 
@@ -186,23 +187,73 @@ export class MapGenerator extends Component {
         }
     }
 
+    /** Port 1:1 từ Unity MapGenerator.SpawnConnections.
+     *  Data có dạng list các CẶP (ShooterIds: [a, b]) → xây adjacency graph → BFS gom cluster
+     *  → mỗi cluster spawn 1 Connection + ConnectionChild cho từng cặp trong cluster. */
     private spawnConnections(data: LevelData): void {
-        if (!data.ConnectedShooters || !data.ConnectedShooters.Connections) return;
-        const parent = this.underParent ?? this.node;
+        const connections = data.ConnectedShooters?.Connections;
+        if (!connections || connections.length === 0) return;
 
-        for (let i = 0; i < data.ConnectedShooters.Connections.length; i++) {
-            const conn = data.ConnectedShooters.Connections[i];
-            let connNode = MapObjectSpawner.instance.getConnection(parent);
-            connNode.name = `ConnectionGroup_${i}`;
+        // 1. Build adjacency graph từ list các cặp
+        const adj: Map<number, Set<number>> = new Map();
+        for (const conn of connections) {
+            if (!conn.ShooterIds || conn.ShooterIds.length < 2) continue;
+            const a = conn.ShooterIds[0], b = conn.ShooterIds[1];
+            if (!adj.has(a)) adj.set(a, new Set());
+            if (!adj.has(b)) adj.set(b, new Set());
+            adj.get(a).add(b);
+            adj.get(b).add(a);
+        }
 
-            // Placeholder: Đánh dấu các bobbin thuộc group connection này
-            for (let id of conn.ShooterIds) {
-                const bobbinNode = this.idToBobbin.get(id);
-                if (bobbinNode) {
-                    let markNode = new Node("Conn_Mark");
-                    bobbinNode.addChild(markNode);
+        // 2. BFS để nhóm bobbin thành cluster (bobbin liên thông)
+        const visited: Set<number> = new Set();
+        const clusters: Set<number>[] = [];
+        for (const startId of adj.keys()) {
+            if (visited.has(startId)) continue;
+            const cluster: Set<number> = new Set();
+            const queue: number[] = [startId];
+            visited.add(startId);
+            while (queue.length > 0) {
+                const cur = queue.shift()!;
+                cluster.add(cur);
+                for (const neighbor of adj.get(cur)!) {
+                    if (visited.has(neighbor)) continue;
+                    visited.add(neighbor);
+                    queue.push(neighbor);
                 }
             }
+            clusters.push(cluster);
+        }
+
+        const parent = this.underParent ?? this.node;
+
+        // 3. Mỗi cluster → 1 Connection + ConnectionChild cho từng pair
+        let clusterIdx = 0;
+        for (const cluster of clusters) {
+            const members: Bobbin[] = [];
+            for (const id of cluster) {
+                const bobbinNode = this.idToBobbin.get(id);
+                if (!bobbinNode) continue;
+                const b = bobbinNode.getComponent(Bobbin);
+                if (b) members.push(b);
+            }
+            if (members.length === 0) continue;
+
+            const pairs: Array<[Bobbin, Bobbin]> = [];
+            for (const conn of connections) {
+                if (!conn.ShooterIds || conn.ShooterIds.length < 2) continue;
+                const idA = conn.ShooterIds[0], idB = conn.ShooterIds[1];
+                if (!cluster.has(idA)) continue;
+                const bA = this.idToBobbin.get(idA)?.getComponent(Bobbin);
+                const bB = this.idToBobbin.get(idB)?.getComponent(Bobbin);
+                if (!bA || !bB) continue;
+                pairs.push([bA, bB]);
+            }
+
+            const connNode = MapObjectSpawner.instance.getConnection(parent);
+            connNode.name = `ConnectionGroup_${clusterIdx++}`;
+            const connComp = connNode.getComponent(Connection) ?? connNode.addComponent(Connection);
+            connComp.setup(members, pairs);
         }
     }
 

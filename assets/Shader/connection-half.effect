@@ -1,0 +1,63 @@
+// Connection Half — port 1:1 từ Unity ConnectionHalf.shader (Assets/Game/Shaders/ConnectionHalf.shader).
+// Chia cylinder thành 2 nửa theo local Y: localY >= 0 → colorA, ngược lại → colorB.
+// Áp dụng brightness boost (saturate(rgb * boost)) để tăng độ rực.
+//
+// Dùng cho ConnectionChild cylinder nối 2 bobbin trong Connection (Linked Bobbin).
+
+CCEffect %{
+  techniques:
+  - name: opaque
+    passes:
+    - vert: connhalf-vs:vert
+      frag: connhalf-fs:frag
+      depthStencilState:
+        depthTest: true
+        depthWrite: true
+      properties: &props
+        colorA:          { value: [1.0, 0.0, 0.0, 1.0], editor: { type: color, displayName: "Color A (top half)" } }
+        colorB:          { value: [0.0, 0.0, 1.0, 1.0], editor: { type: color, displayName: "Color B (bottom half)" } }
+        brightnessBoost: { value: 1.4, editor: { range: [1.0, 3.0], slide: true, step: 0.01, displayName: "Brightness Boost" } }
+}%
+
+CCProgram connhalf-vs %{
+  precision highp float;
+  #include <legacy/input-standard>
+  #include <builtin/uniforms/cc-global>
+  #include <legacy/local-batch>
+
+  out float v_localY;
+
+  vec4 vert () {
+    StandardVertInput In;
+    CCVertInput(In);
+    mat4 matWorld, matWorldIT;
+    CCGetWorldMatrixFull(matWorld, matWorldIT);
+
+    // Local Y trước khi transform → quyết định half nào (giống Unity IN.positionOS.y)
+    v_localY = In.position.y;
+
+    vec4 worldPos = matWorld * In.position;
+    return cc_matProj * cc_matView * worldPos;
+  }
+}%
+
+CCProgram connhalf-fs %{
+  precision highp float;
+  #include <legacy/output>
+
+  in float v_localY;
+
+  uniform ConnHalfConstants {
+    vec4 colorA;
+    vec4 colorB;
+    float brightnessBoost;
+  };
+
+  vec4 frag () {
+    // Unity: half4 albedo = IN.localY >= 0.0h ? _ColorA : _ColorB;
+    vec4 albedo = v_localY >= 0.0 ? colorA : colorB;
+    // Unity: albedo.rgb = saturate(albedo.rgb * _BrightnessBoost);
+    albedo.rgb = clamp(albedo.rgb * brightnessBoost, 0.0, 1.0);
+    return CCFragOutput(albedo);
+  }
+}%

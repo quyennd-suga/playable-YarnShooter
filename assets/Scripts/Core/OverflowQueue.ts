@@ -139,6 +139,8 @@ export class OverflowQueue extends Component {
                 bobbin.node.setRotation(Quat.IDENTITY);
                 bobbin.node.setScale(scaleTo);
                 bobbin.isActive = true;
+                // Port 1:1 từ Unity Bobbin.FlyToOverflowSlot:870 — reset isCheckedOut để click được lại
+                bobbin.isCheckedOut = false;
                 onArrived();
             })
             .start();

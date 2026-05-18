@@ -2721,6 +2721,8 @@
       "__id__": 0
     },
     "fileId": "bdM2k4kaxcJYqxRVD2fQbZ",
+    "instance": null,
+    "targetOverrides": null,
     "nestedPrefabInstanceRoots": null
   },
   {
@@ -2834,6 +2836,9 @@
     "hiddenShooterMaterial": {
       "__uuid__": "10f29c8d-6ca6-4b7d-85d2-d9e58846e0b5",
       "__expectedType__": "cc.Material"
+    },
+    "center": {
+      "__id__": 3
     },
     "_id": ""
   },

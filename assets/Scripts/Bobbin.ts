@@ -3,6 +3,10 @@ import { EventBus, GameEvents } from './Core/EventBus';
 import { ShooterData } from './Data/LevelInterfaces';
 import { MapObjectSpawner } from './MapObjectSpawner';
 import { RopeSimulator } from './Core/RopeSimulator';
+import { Connection } from './Core/Connection';
+import { SplineManager } from './Core/SplineManager';
+import { LevelManager } from './Core/LevelManager';
+import { TrayManager } from './Core/TrayManager';
 const { ccclass, property } = _decorator;
 
 @ccclass('Bobbin')
@@ -33,12 +37,29 @@ export class Bobbin extends Component {
     /** Material che màu thật của bobbin khi inactive (tương đương DataManager.HiddenShooterMaterial bên Unity). */
     @property(Material) public hiddenShooterMaterial: Material = null;
 
+    // ─── Mechanic Connection (Linked Bobbin) ───────────────────────────────────
+    /** Anchor cho rope cylinder của Connection (port 1:1 từ Unity Bobbin.center).
+     *  Gán node "CenterConnection" trong prefab. */
+    @property(Node) public center: Node = null;
+
     public isActive: boolean = false;
     public data: ShooterData = null;
 
     // Trạng thái vị trí — giống các flag _inQueueRow / _inOverflow bên Unity Bobbin
     public inQueueRow: boolean = false;  // đang trong grid queue (GridQueueManager)
     public inOverflow: boolean = false;  // đang trong overflow queue (OverflowQueue)
+
+    // ─── Connection state (runtime, không expose Inspector) ────────────────────
+    /** Connection chứa bobbin này (null nếu standalone). Gán bởi Connection.setup. */
+    public connection: Connection = null;
+    /** True khi bobbin đã bắt đầu checkout (đang bay/trên belt/đã hoàn thành). */
+    public isCheckedOut: boolean = false;
+    /** Score đã về 0 nhưng đang chờ các bobbin khác trong connection cùng xong. */
+    public pendingConnectionComplete: boolean = false;
+    /** Bobbin đang bay về queue nhưng connection đã hoàn thành — sẽ complete khi đáp xuống. */
+    public markedForCompletion: boolean = false;
+    /** Reference tới BobbinFrozen wrap quanh bobbin (set bởi MapGenerator.spawnFrozenShooters). */
+    public frozenMechanic: Component = null;
 
     private _mat: Material = null;
     private _matInactive: Material = null; // Material instance của inactiveVisual (cùng material asset với mesh chính)
@@ -113,6 +134,18 @@ export class Bobbin extends Component {
             // Ngoài grid queue: luôn show activeVisual, không động vào score
             if (this.activeVisual) this.activeVisual.active = true;
             if (this.inactiveVisual) this.inactiveVisual.active = false;
+        }
+
+        // Port 1:1 từ Unity SetBobbinState:355 — khi đi vào inactive, dời center hơi xuống
+        // để rope cylinder của Connection nối đúng phần body bobbin trong queue.
+        if (!active && this.center) {
+            this.center.setPosition(0, -0.1, 0);
+        }
+
+        // Refresh màu cylinder của connection khi member chuyển active/inactive
+        // (port 1:1 từ Unity Bobbin.SetBobbinState — `if (connection != null) connection.RefreshColor(this);`)
+        if (this.connection) {
+            this.connection.refreshColor(this);
         }
 
         // Mystery reveal VFX — port 1:1 từ Unity Bobbin.SetBobbinState (nhánh isActive && mystery.activeSelf)
@@ -221,8 +254,28 @@ export class Bobbin extends Component {
     }
 
     public onClick() {
-        // Bắn sự kiện lên cho QueueManager quyết định xem có cho phép rút (checkout) không
+        if (this.isCheckedOut) { this.shake(); return; }
+        if (!TrayManager.instance?.hasAvailableTray) { this.shake(); return; }
+
+        // Connection (Linked Bobbin) — port 1:1 từ Unity Bobbin.OnClick (nhánh `if connection != null`).
+        // Click bất kỳ member nào → CheckoutAll cả cluster.
+        if (this.connection) {
+            if (!this.connection.canCheckout()) { this.shake(); return; }
+            this.connection.checkoutAll();
+            return;
+        }
+
+        // Standalone bobbin: bắn sự kiện lên cho QueueManager/LevelManager quyết định
         EventBus.emit(GameEvents.ON_BOBBIN_CLICKED, this);
+    }
+
+    /** Bobbin này có thể tham gia checkout trong connection không?
+     *  True nếu đang ở đầu hàng, hoặc tất cả bobbin đứng trước trong hàng đều cùng connection.
+     *  (Port 1:1 từ Unity Bobbin.IsEffectivelyActiveForConnection). */
+    public isEffectivelyActiveForConnection(conn: Connection): boolean {
+        if (this.isActive) return true;
+        if (!this.inQueueRow) return false;
+        return LevelManager.instance?.isBobbinEffectivelyActive(this, conn) ?? false;
     }
 
     public updateOriginPos() {

@@ -2,6 +2,7 @@ import { _decorator, Component, Vec3, tween } from 'cc';
 import { EventBus, GameEvents } from './EventBus';
 import { Bobbin } from '../Bobbin';
 import { SplineManager } from './SplineManager';
+import { Connection } from './Connection';
 
 const { ccclass, property } = _decorator;
 
@@ -86,6 +87,33 @@ export class LevelManager extends Component {
             this._shiftRow(r);
             return;
         }
+    }
+
+    // ─── Connection helpers (port 1:1 từ Unity LevelManager) ────────────────────
+
+    /** Kiểm tra bobbin có thể tham gia connection checkout không.
+     *  True nếu không có Lock và mọi Bobbin trước nó trong hàng đều thuộc cùng connection.
+     *  Port 1:1 từ Unity LevelManager.IsBobbinEffectivelyActive. */
+    public isBobbinEffectivelyActive(bobbin: Bobbin, conn: Connection): boolean {
+        for (const row of this._rowQueues) {
+            const idx = row.indexOf(bobbin);
+            if (idx < 0) continue;
+            for (let i = 0; i < idx; i++) {
+                // Lock chặn — Cocos hiện chưa có QueueItemType.Lock; khi port Lock cần thêm check ở đây
+                if (row[i].connection !== conn) return false;
+            }
+            return true;
+        }
+        return false;
+    }
+
+    /** Trả về index của bobbin trong row của nó (dùng cho Connection.checkoutAll sort head-first). */
+    public getQueueRowIndex(bobbin: Bobbin): number {
+        for (const row of this._rowQueues) {
+            const idx = row.indexOf(bobbin);
+            if (idx >= 0) return idx;
+        }
+        return Number.MAX_SAFE_INTEGER;
     }
 
     // ─── Private ─────────────────────────────────────────────────────────────────

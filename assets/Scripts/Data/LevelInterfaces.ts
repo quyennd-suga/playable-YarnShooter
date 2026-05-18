@@ -29,8 +29,15 @@ export interface IdListWrapper {
     ShooterIds: number[];
 }
 
+/** Một cặp bobbin được nối với nhau (port 1:1 từ Unity ConnectedShooterData).
+ *  ShooterIds phải có đúng 2 phần tử = 2 bobbin id. */
+export interface ConnectionPair {
+    Id?: number;
+    ShooterIds: number[];
+}
+
 export interface ConnectionWrapper {
-    Connections: IdListWrapper[];
+    Connections: ConnectionPair[];
 }
 
 export interface IceBlockData {

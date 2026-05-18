@@ -1027,7 +1027,7 @@
     "_enabled": true,
     "__prefab": null,
     "levelData": {
-      "__uuid__": "aa90f53a-9e98-41c1-a874-435a56b34da8",
+      "__uuid__": "bca7828e-a425-4c21-aaea-c760bf7dfed6",
       "__expectedType__": "cc.JsonAsset"
     },
     "aboveParent": {
@@ -1083,7 +1083,14 @@
     "prefabMover": null,
     "prefabPipe": null,
     "prefabFrozen": null,
-    "prefabConnection": null,
+    "prefabConnection": {
+      "__uuid__": "f1467f61-e661-4e61-ab78-18bddd8168c5",
+      "__expectedType__": "cc.Prefab"
+    },
+    "prefabConnectionChild": {
+      "__uuid__": "cc99533b-b293-45a2-974d-5faf115d0658",
+      "__expectedType__": "cc.Prefab"
+    },
     "prefabFxBobbin": null,
     "fxBobbinLifetime": 1.5,
     "_id": "4c3nx2c2VK4KlnwldJyJZ3"

@@ -1,4 +1,6 @@
 import { _decorator, Component, Prefab, NodePool, instantiate, Node, Vec3 } from 'cc';
+import { ConnectionChild } from './ConnectionChild';
+import { Connection } from './Core/Connection';
 const { ccclass, property } = _decorator;
 
 @ccclass('MapObjectSpawner')
@@ -12,6 +14,8 @@ export class MapObjectSpawner extends Component {
     @property(Prefab) public prefabPipe: Prefab = null;
     @property(Prefab) public prefabFrozen: Prefab = null;
     @property(Prefab) public prefabConnection: Prefab = null;
+    /** Rope cylinder nối 2 bobbin trong Connection (port từ Unity prefabConnectionChild). */
+    @property(Prefab) public prefabConnectionChild: Prefab = null;
     /** FX particle khi Mystery Bobbin reveal (port từ Unity MapObjectSpawner.prefabFxBobbin). */
     @property(Prefab) public prefabFxBobbin: Prefab = null;
     /** Thời gian sống của fxBobbin trước khi tự release về pool (tương đương PoolableParticle bên Unity). */
@@ -24,6 +28,7 @@ export class MapObjectSpawner extends Component {
     private pipePool: NodePool = new NodePool();
     private frozenPool: NodePool = new NodePool();
     private connectionPool: NodePool = new NodePool();
+    private connectionChildPool: NodePool = new NodePool();
     private fxBobbinPool: NodePool = new NodePool();
 
     onLoad() {
@@ -105,13 +110,37 @@ export class MapObjectSpawner extends Component {
     }
     public releaseFrozen(node: Node) { this.frozenPool.put(node); }
 
-    // --- CONNECTION ---
+    // --- CONNECTION (cluster host node) ---
     public getConnection(parent: Node): Node {
         let node = this.getNodeFromPool(this.connectionPool, this.prefabConnection, "ConnectionGroup");
         node.setParent(parent);
+        node.active = true;
         return node;
     }
-    public releaseConnection(node: Node) { this.connectionPool.put(node); }
+    public releaseConnection(node: Node) {
+        if (!node?.isValid) return;
+        // Port 1:1 từ Unity: pool's actionOnRelease gọi c.ResetForPool() → release tất cả ConnectionChild
+        const comp = node.getComponent(Connection);
+        if (comp) comp.resetForPool();
+        node.active = false;
+        this.connectionPool.put(node);
+    }
+
+    // --- CONNECTION CHILD (rope cylinder nối 2 bobbin) ---
+    /** Lấy 1 ConnectionChild (rope cylinder) từ pool, parent dưới `parent`. */
+    public getConnectionChild(parent: Node): ConnectionChild {
+        const node = this.getNodeFromPool(this.connectionChildPool, this.prefabConnectionChild, "ConnectionChild");
+        node.setParent(parent);
+        node.active = true;
+        const comp = node.getComponent(ConnectionChild) ?? node.addComponent(ConnectionChild);
+        return comp;
+    }
+    public releaseConnectionChild(child: ConnectionChild) {
+        if (!child?.node?.isValid) return;
+        child.resetForPool();
+        child.node.active = false;
+        this.connectionChildPool.put(child.node);
+    }
 
     // --- FX BOBBIN (Mystery reveal vfx) ---
     /** Port 1:1 từ Unity MapObjectSpawner.SpawnFxBobbin: lấy fx từ pool, đặt vị trí, play rồi tự release. */

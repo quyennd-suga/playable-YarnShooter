@@ -67,6 +67,15 @@ export class QueueManager extends Component {
 
         this._flyToSlot(bobbin, this._slots[targetIdx], () => {
             this._returningCount--;
+            // Port 1:1 từ Unity: nếu connection đã complete trong lúc bobbin đang bay về
+            // → complete + destroy thay vì vào queue (giống Bobbin.MarkForCompletion).
+            if (bobbin.markedForCompletion) {
+                if (bobbin.node?.isValid) {
+                    tween(bobbin.node).to(0.2, { scale: Vec3.ZERO })
+                        .call(() => { if (bobbin.node?.isValid) bobbin.node.destroy(); }).start();
+                }
+                return;
+            }
             this._queued.push(bobbin);
             this._repackQueue(bobbin); // skip hop cho bobbin vừa đáp
         });
@@ -80,6 +89,11 @@ export class QueueManager extends Component {
             this._queued.splice(idx, 1);
             this._repackQueue();
         }
+    }
+
+    /** True nếu bobbin đã đáp xuống bottom queue (port 1:1 từ Unity QueueManager.IsQueued). */
+    public isQueued(bobbin: Bobbin): boolean {
+        return this._queued.indexOf(bobbin) >= 0;
     }
 
     // ─── Private ─────────────────────────────────────────────────────────────────
@@ -138,6 +152,9 @@ export class QueueManager extends Component {
                 bobbin.inQueueRow = false;
                 bobbin.inOverflow = false;
                 bobbin.isActive = true;
+                // Port 1:1 từ Unity Bobbin.FlyToQueueSlotRoutine:816 — reset isCheckedOut khi đáp xuống queue
+                // để click được lại lần sau (đặc biệt quan trọng cho bobbin trong connection cluster).
+                bobbin.isCheckedOut = false;
                 bobbin.updateOriginPos();
                 // Hiện lại score1 khi đáp xuống bottom queue (giống Unity FlyToQueueSlotRoutine)
                 if (bobbin.score1) bobbin.score1.node.active = true;
