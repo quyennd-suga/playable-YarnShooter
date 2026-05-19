@@ -1,0 +1,146 @@
+{
+  "ver": "2.3.14",
+  "importer": "fbx",
+  "imported": true,
+  "uuid": "f21e5749-d3dd-4487-ac12-3d8a128f5af5",
+  "files": [],
+  "subMetas": {
+    "97b51": {
+      "importer": "gltf-mesh",
+      "uuid": "f21e5749-d3dd-4487-ac12-3d8a128f5af5@97b51",
+      "displayName": "",
+      "id": "97b51",
+      "name": "Cube.003.mesh",
+      "userData": {
+        "gltfIndex": 0,
+        "triangleCount": 44
+      },
+      "ver": "1.1.1",
+      "imported": true,
+      "files": [
+        ".bin",
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "48b02": {
+      "importer": "gltf-embeded-image",
+      "uuid": "f21e5749-d3dd-4487-ac12-3d8a128f5af5@48b02",
+      "displayName": "",
+      "id": "48b02",
+      "name": "base_color_texture.image",
+      "userData": {
+        "gltfIndex": 0,
+        "fixAlphaTransparencyArtifacts": true,
+        "hasAlpha": true,
+        "type": "texture"
+      },
+      "ver": "1.0.3",
+      "imported": true,
+      "files": [
+        ".json",
+        ".png"
+      ],
+      "subMetas": {}
+    },
+    "7d6ab": {
+      "importer": "texture",
+      "uuid": "f21e5749-d3dd-4487-ac12-3d8a128f5af5@7d6ab",
+      "displayName": "",
+      "id": "7d6ab",
+      "name": "base_color_texture.texture",
+      "userData": {
+        "wrapModeS": "repeat",
+        "wrapModeT": "repeat",
+        "minfilter": "linear",
+        "magfilter": "linear",
+        "mipfilter": "none",
+        "anisotropy": 0,
+        "isUuid": true,
+        "imageUuidOrDatabaseUri": "f21e5749-d3dd-4487-ac12-3d8a128f5af5@48b02"
+      },
+      "ver": "1.0.22",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "3aa81": {
+      "importer": "gltf-material",
+      "uuid": "f21e5749-d3dd-4487-ac12-3d8a128f5af5@3aa81",
+      "displayName": "",
+      "id": "3aa81",
+      "name": "MysteryCube_Texture.material",
+      "userData": {
+        "gltfIndex": 0
+      },
+      "ver": "1.0.14",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "5bae4": {
+      "importer": "gltf-scene",
+      "uuid": "f21e5749-d3dd-4487-ac12-3d8a128f5af5@5bae4",
+      "displayName": "",
+      "id": "5bae4",
+      "name": "Mystery_Cube_1.prefab",
+      "userData": {
+        "gltfIndex": 0
+      },
+      "ver": "1.0.14",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    }
+  },
+  "userData": {
+    "imageMetas": [
+      {
+        "name": "base_color_texture",
+        "uri": "f21e5749-d3dd-4487-ac12-3d8a128f5af5@48b02"
+      }
+    ],
+    "fbx": {
+      "smartMaterialEnabled": true
+    },
+    "lods": {
+      "enable": false,
+      "hasBuiltinLOD": false,
+      "options": [
+        {
+          "screenRatio": 0.25,
+          "faceCount": 1
+        },
+        {
+          "screenRatio": 0.125,
+          "faceCount": 0.25
+        },
+        {
+          "screenRatio": 0.01,
+          "faceCount": 0.1
+        }
+      ]
+    },
+    "assetFinder": {
+      "meshes": [
+        "f21e5749-d3dd-4487-ac12-3d8a128f5af5@97b51"
+      ],
+      "skeletons": [],
+      "textures": [
+        "f21e5749-d3dd-4487-ac12-3d8a128f5af5@7d6ab"
+      ],
+      "materials": [
+        "f21e5749-d3dd-4487-ac12-3d8a128f5af5@3aa81"
+      ],
+      "scenes": [
+        "f21e5749-d3dd-4487-ac12-3d8a128f5af5@5bae4"
+      ]
+    }
+  }
+}

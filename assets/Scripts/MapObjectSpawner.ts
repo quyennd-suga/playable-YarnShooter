@@ -5,6 +5,12 @@ import { Bobbin } from './Bobbin';
 import { BobbinWall } from './BobbinWall';
 import { BobbinWallChild } from './BobbinWallChild';
 import { BobbinWallBorder } from './BobbinWallBorder';
+import { Lock } from './Lock';
+import { Key } from './Key';
+import { Barrier } from './Barrier';
+import { Creator } from './Creator';
+import { Wall } from './Wall';
+import { Pipe } from './Pipe';
 const { ccclass, property } = _decorator;
 
 @ccclass('MapObjectSpawner')
@@ -35,6 +41,18 @@ export class MapObjectSpawner extends Component {
     /** Prefab thanh viền ở các cạnh (top/bottom/left/right) của wall. */
     @property(Prefab) public prefabBobbinWallCanh: Prefab = null;
 
+    /** Prefab Key — bobbin raycast trúng sẽ fly đến Lock đầu hàng để unlock. */
+    @property(Prefab) public prefabKey: Prefab = null;
+
+    /** Prefab Barrier — hàng rào dài trên above layer, bobbin cùng material va vào trừ HP. */
+    @property(Prefab) public prefabBarrier: Prefab = null;
+
+    /** Prefab Creator — đứng trên above layer, "tái sinh" yarn khi yarn cùng material bị despawn. */
+    @property(Prefab) public prefabCreator: Prefab = null;
+
+    /** Prefab Wall — chướng ngại vật tĩnh thuần visual, không có HP/interaction. */
+    @property(Prefab) public prefabWall: Prefab = null;
+
     private yarnPool: NodePool = new NodePool();
     private bobbinPool: NodePool = new NodePool();
     private lockPool: NodePool = new NodePool();
@@ -48,6 +66,10 @@ export class MapObjectSpawner extends Component {
     private bobbinWallChildPool: NodePool = new NodePool();
     private bobbinWallGocPool: NodePool = new NodePool();
     private bobbinWallCanhPool: NodePool = new NodePool();
+    private keyPool: NodePool = new NodePool();
+    private barrierPool: NodePool = new NodePool();
+    private creatorPool: NodePool = new NodePool();
+    private wallPool: NodePool = new NodePool();
 
     onLoad() {
         if (!MapObjectSpawner.instance) {
@@ -110,9 +132,17 @@ export class MapObjectSpawner extends Component {
     public getLock(parent: Node): Node {
         let node = this.getNodeFromPool(this.lockPool, this.prefabLock, "Lock");
         node.setParent(parent);
+        node.active = true;
         return node;
     }
-    public releaseLock(node: Node) { this.lockPool.put(node); }
+    /** Trả Lock về pool, gọi resetForPool() để clear isReserved + transform. */
+    public releaseLock(node: Node) {
+        if (!node?.isValid) return;
+        const lockComp = node.getComponent(Lock);
+        if (lockComp) lockComp.resetForPool();
+        node.active = false;
+        this.lockPool.put(node);
+    }
 
     // --- MOVER ---
     public getMover(parent: Node): Node {
@@ -123,12 +153,19 @@ export class MapObjectSpawner extends Component {
     public releaseMover(node: Node) { this.moverPool.put(node); }
 
     // --- PIPE ---
-    public getPipe(parent: Node): Node {
-        let node = this.getNodeFromPool(this.pipePool, this.prefabPipe, "Pipe");
+    public getPipe(parent: Node): Pipe | null {
+        const node = this.getNodeFromPool(this.pipePool, this.prefabPipe, "Pipe");
         node.setParent(parent);
-        return node;
+        node.active = true;
+        return node.getComponent(Pipe) ?? node.addComponent(Pipe);
     }
-    public releasePipe(node: Node) { this.pipePool.put(node); }
+    /** Trả Pipe về pool, reset data/_shooterIndex/transform qua Pipe.resetForPool. */
+    public releasePipe(pipe: Pipe) {
+        if (!pipe?.node?.isValid) return;
+        pipe.resetForPool();
+        pipe.node.active = false;
+        this.pipePool.put(pipe.node);
+    }
 
     // --- FROZEN ---
     public getFrozen(parent: Node): Node {
@@ -222,6 +259,70 @@ export class MapObjectSpawner extends Component {
         border.resetForPool();
         border.node.active = false;
         this.bobbinWallCanhPool.put(border.node);
+    }
+
+    // --- WALL ---
+    /** Lấy Wall từ pool. Caller set position + scale tùy theo sqrt(gridPoints). */
+    public getWall(parent: Node): Wall | null {
+        const node = this.getNodeFromPool(this.wallPool, this.prefabWall, "Wall");
+        node.setParent(parent);
+        node.active = true;
+        return node.getComponent(Wall) ?? node.addComponent(Wall);
+    }
+    /** Trả Wall về pool. Reset transform qua Wall.resetForPool. */
+    public releaseWall(wall: Wall) {
+        if (!wall?.node?.isValid) return;
+        wall.resetForPool();
+        wall.node.active = false;
+        this.wallPool.put(wall.node);
+    }
+
+    // --- CREATOR ---
+    /** Lấy Creator từ pool. Caller gọi `creator.setup(pipeData, parent)` sau khi đặt position. */
+    public getCreator(parent: Node): Creator | null {
+        const node = this.getNodeFromPool(this.creatorPool, this.prefabCreator, "Creator");
+        node.setParent(parent);
+        node.active = true;
+        return node.getComponent(Creator) ?? node.addComponent(Creator);
+    }
+    /** Trả Creator về pool, reset state qua Creator.resetForPool (unsubscribe Yarn event). */
+    public releaseCreator(creator: Creator) {
+        if (!creator?.node?.isValid) return;
+        creator.resetForPool();
+        creator.node.active = false;
+        this.creatorPool.put(creator.node);
+    }
+
+    // --- BARRIER ---
+    /** Lấy Barrier từ pool. Caller setup material/score/Length/Direction qua Barrier methods. */
+    public getBarrier(parent: Node): Barrier | null {
+        const node = this.getNodeFromPool(this.barrierPool, this.prefabBarrier, "Barrier");
+        node.setParent(parent);
+        node.active = true;
+        return node.getComponent(Barrier) ?? node.addComponent(Barrier);
+    }
+    /** Trả Barrier về pool, reset toàn bộ state qua Barrier.resetForPool. */
+    public releaseBarrier(barrier: Barrier) {
+        if (!barrier?.node?.isValid) return;
+        barrier.resetForPool();
+        barrier.node.active = false;
+        this.barrierPool.put(barrier.node);
+    }
+
+    // --- KEY ---
+    /** Lấy Key từ pool. Caller đặt position; SplineManager raycast trúng sẽ trigger tryActivate. */
+    public getKey(parent: Node): Key | null {
+        const node = this.getNodeFromPool(this.keyPool, this.prefabKey, "Key");
+        node.setParent(parent);
+        node.active = true;
+        return node.getComponent(Key) ?? node.addComponent(Key);
+    }
+    /** Trả Key về pool, reset state (_isUsed/scale/fx) qua Key.resetForPool(). */
+    public releaseKey(key: Key) {
+        if (!key?.node?.isValid) return;
+        key.resetForPool();
+        key.node.active = false;
+        this.keyPool.put(key.node);
     }
 
     // --- FX BOBBIN (Mystery reveal vfx) ---

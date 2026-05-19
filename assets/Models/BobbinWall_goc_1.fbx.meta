@@ -2,15 +2,33 @@
   "ver": "2.3.14",
   "importer": "fbx",
   "imported": true,
-  "uuid": "6d63f3ba-3a21-4617-b1fa-67ed5c6b1e1d",
+  "uuid": "a3497816-2109-4fa9-9496-f6eb20fc6507",
   "files": [],
   "subMetas": {
-    "2d7f3": {
-      "importer": "gltf-scene",
-      "uuid": "6d63f3ba-3a21-4617-b1fa-67ed5c6b1e1d@2d7f3",
+    "a62fe": {
+      "importer": "gltf-mesh",
+      "uuid": "a3497816-2109-4fa9-9496-f6eb20fc6507@a62fe",
       "displayName": "",
-      "id": "2d7f3",
-      "name": "BobbinWall.prefab",
+      "id": "a62fe",
+      "name": "Scene.mesh",
+      "userData": {
+        "gltfIndex": 0,
+        "triangleCount": 124
+      },
+      "ver": "1.1.1",
+      "imported": true,
+      "files": [
+        ".bin",
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "9c357": {
+      "importer": "gltf-scene",
+      "uuid": "a3497816-2109-4fa9-9496-f6eb20fc6507@9c357",
+      "displayName": "",
+      "id": "9c357",
+      "name": "BobbinWall_goc_1.prefab",
       "userData": {
         "gltfIndex": 0
       },
@@ -46,12 +64,14 @@
       ]
     },
     "assetFinder": {
-      "meshes": [],
+      "meshes": [
+        "a3497816-2109-4fa9-9496-f6eb20fc6507@a62fe"
+      ],
       "skeletons": [],
       "textures": [],
       "materials": [],
       "scenes": [
-        "6d63f3ba-3a21-4617-b1fa-67ed5c6b1e1d@2d7f3"
+        "a3497816-2109-4fa9-9496-f6eb20fc6507@9c357"
       ]
     }
   }

@@ -12,6 +12,10 @@ import { Connection } from './Connection';
 import { MapObjectSpawner } from '../MapObjectSpawner';
 import { BobbinWall } from '../BobbinWall';
 import { BobbinWallChild } from '../BobbinWallChild';
+import { Key } from '../Key';
+import { Barrier } from '../Barrier';
+import { BoardScaler } from '../BoardScaler';
+import { GameManager } from './GameManager';
 
 const { ccclass, property } = _decorator;
 
@@ -89,6 +93,15 @@ export class SplineManager extends Component {
     @property public raycastYOffset: number = 0.05;
     @property public ropeReleaseDelay: number = 0.08;
     @property(Prefab) public ropePrefab: Prefab = null;
+
+    /** Tham chiếu aboveParent (cùng node mà MapGenerator dùng) — để scale raycastYOffset theo
+     *  scale.y của parent khi ảnh pixel lớn làm yarn collider thu nhỏ. Nếu để trống thì offset
+     *  dùng nguyên gốc (chấp nhận miss yarn ở các level có ảnh quá lớn). */
+    @property(Node) public aboveParent: Node = null;
+
+    /** Reference BoardScaler — dùng để lấy cellSize world (= boardScaler.cellSize * parentScale)
+     *  cho nextFirePos offset. Port từ Unity `cellW = mapGenerator.cellSize`. */
+    @property(BoardScaler) public boardScaler: BoardScaler = null;
 
     private _activeMovers: TrayMover[] = [];
     private _checkoutQueue: PendingCheckout[] = [];
@@ -606,10 +619,26 @@ export class SplineManager extends Component {
         }
     }
 
+    /** Port từ Unity SplineManager `cellW = mapGenerator.cellSize`.
+     *  World cellSize = BoardScaler.cellSize * aboveParent.scale (parent scale ảnh hưởng).
+     *  Fallback 0.1 nếu chưa wire — default BoardScaler.cellSize. */
+    private _cellW(): number {
+        const raw = this.boardScaler?.cellSize ?? 0.1;
+        const parentScale = this.aboveParent?.scale.x ?? 1;
+        return raw * parentScale;
+    }
+
     private fireYarnRaycast(mover: TrayMover, origin: Vec3, inward: Vec3) {
         if (!mover.bobbin || mover.bobbin.data.ammo <= 0) return;
 
-        let rayOriginY = origin.y + this.raycastYOffset;
+        // Base Y của ray = aboveParent.worldPosition.y (Y của yarn collider center) thay vì
+        // bobbin.shoot.y. Lý do: bobbin.shoot có thể không cùng level với yarn, và khi
+        // BoardScaler scale parent xuống cho ảnh lớn thì yarn collider Y-extent thu nhỏ tỉ lệ
+        // → ray base Y phải bám theo yarn level. Offset cũng được nhân với scale.y cùng lý do.
+        // Fallback origin.y nếu chưa wire aboveParent (giữ behavior cũ).
+        const parentScaleY = this.aboveParent?.scale.y ?? 1;
+        const baseY = this.aboveParent?.worldPosition.y ?? origin.y;
+        let rayOriginY = baseY + this.raycastYOffset * parentScaleY;
         geometry.Ray.set(this._ray, origin.x, rayOriginY, origin.z, inward.x, inward.y, inward.z);
         let didHit = false;
 
@@ -641,6 +670,42 @@ export class SplineManager extends Component {
                         didHit = true;
                     }
                     // Material mismatch hoặc wall đã chết → block raycast (Unity: single-hit raycast dừng tại đây).
+                    break;
+                }
+
+                // Key check — port 1:1 từ Unity SplineManager FireYarnRaycast nhánh _keyLayer.
+                // Key có thể nằm sâu trong hierarchy nên search lên parent.
+                let keyComp = hitNode.getComponent(Key);
+                let pk = hitNode.parent;
+                while (!keyComp && pk) {
+                    keyComp = pk.getComponent(Key);
+                    pk = pk.parent;
+                }
+                if (keyComp) {
+                    console.log('[KeyHit] raycast trúng Key node=', keyComp.node.name, 'pos=', keyComp.node.worldPosition);
+                    const ok = mover.bobbin.handleKeyHit(keyComp);
+                    console.log('[KeyHit] handleKeyHit result=', ok);
+                    if (ok) didHit = true;
+                    break;
+                }
+
+                // Barrier check — search Barrier component qua hitNode + ancestors.
+                // BarrierCollider marker là OPTIONAL (Unity dùng để filter, Cocos thì bất kỳ
+                // collider nào có Barrier ancestor đều trigger). Bobbin sẽ damage barrier khi
+                // raycast trúng head/body/tail — không cần đính BarrierCollider lên từng node.
+                let barrier: Barrier | null = hitNode.getComponent(Barrier);
+                let pb = hitNode.parent;
+                while (!barrier && pb) {
+                    barrier = pb.getComponent(Barrier);
+                    pb = pb.parent;
+                }
+                if (barrier) {
+                    if (mover.bobbin.handleBarrierHit(barrier)) {
+                        // Unity: isMatch=true → trừ ammo bobbin + setup anchor/rope tại hit.point.
+                        this.handleBarrierRopeAndAnchor(mover, res.hitPoint, res.collider);
+                        didHit = true;
+                    }
+                    // Mismatch material / dead barrier → block ray (single-hit semantic).
                     break;
                 }
 
@@ -680,18 +745,17 @@ export class SplineManager extends Component {
         mover.ropeReleaseTimer = 0;
         mover.hasAnchor = true;
 
-        let cellSize = 1.0;
-        if (collider && collider.worldBounds) {
-            let he = collider.worldBounds.halfExtents;
-            cellSize = Math.max(he.x, he.z) * 2.0;
-        }
+        // Unity: cellW = mapGenerator.cellSize (constant). KHÔNG đọc từ collider bounds vì
+        // barrier/long colliders sẽ trả về halfExtents khổng lồ.
+        const cellSize = this._cellW();
 
         let nextPos = new Vec3();
         Vec3.scaleAndAdd(nextPos, yarn.node.worldPosition, mover.lastSnapDir, cellSize);
         mover.nextFirePos = nextPos;
 
         let tPos = yarn.node.worldPosition.clone();
-        tPos.y += this.raycastYOffset;
+        // Cùng lý do với raycast: scale offset theo aboveParent để rope không "bay" trên đầu yarn
+        tPos.y += this.raycastYOffset * (this.aboveParent?.scale.y ?? 1);
 
         mover.ropeReleaseTimer = 0;
 
@@ -707,7 +771,10 @@ export class SplineManager extends Component {
             mover.activeRope.targetPos = tPos;
         }
 
-        yarn.despawn(() => yarn.node.destroy());
+        yarn.despawn(() => {
+            GameManager.instance?.removeYarn(yarn);
+            if (yarn.node?.isValid) yarn.node.destroy();
+        });
 
         if (mover.bobbin.data.ammo <= 0) {
             // Port 1:1 từ Unity SplineManager.OnBobbinScoreZero
@@ -728,19 +795,69 @@ export class SplineManager extends Component {
         }
     }
 
+    /** Port từ Unity SplineManager.FireYarnRaycast nhánh Barrier (line 359-409):
+     *  Bobbin.handleBarrierHit đã damage barrier. Hàm này:
+     *  - Trừ ammo bobbin (Unity `if (isMatch) mover.Bobbin.score--`)
+     *  - Setup anchor + rope target tại hit.point (KHÔNG phải collider.bounds.center vì barrier dài)
+     *  - Tính nextFirePos = hit.point + snapDir * cellSize
+     *  - Check completion khi ammo = 0. */
+    private handleBarrierRopeAndAnchor(mover: TrayMover, hitPoint: Vec3, _collider: import('cc').Collider) {
+        mover.bobbin.decrementAmmo();
+        mover.ropeReleaseTimer = 0;
+        mover.hasAnchor = true;
+
+        // CRITICAL: Barrier body collider có halfExtents lớn (nửa chiều dài body),
+        // dùng nó cho cellSize sẽ làm nextFirePos cách quá xa → bobbin chỉ damage 1 lần
+        // trong cả pass. Phải dùng cellW từ BoardScaler (port Unity `cellW = cellSize`).
+        const cellSize = this._cellW();
+
+        const nextPos = new Vec3();
+        Vec3.scaleAndAdd(nextPos, hitPoint, mover.lastSnapDir, cellSize);
+        mover.nextFirePos = nextPos;
+
+        const tPos = hitPoint.clone();
+        tPos.y += this.raycastYOffset * (this.aboveParent?.scale.y ?? 1);
+
+        if (!mover.activeRope && this.ropePrefab) {
+            const ropeNode = instantiate(this.ropePrefab);
+            this.node.addChild(ropeNode);
+            mover.activeRope = ropeNode.getComponent(RopeSimulator) || ropeNode.addComponent(RopeSimulator);
+            mover.activeRope.pointA = mover.bobbin.node;
+            mover.activeRope.targetPos = tPos;
+            mover.activeRope.setColor(mover.bobbin.currentColor);
+            mover.activeRope.forceRefresh();
+        } else if (mover.activeRope) {
+            mover.activeRope.targetPos = tPos;
+        }
+
+        // Completion check khi ammo về 0
+        if (mover.bobbin.data.ammo <= 0) {
+            if (!mover.bobbin.connection) {
+                this.handleBobbinCompleteOnBelt(mover);
+            } else {
+                mover.bobbin.pendingConnectionComplete = true;
+                if (mover.activeRope) {
+                    const rope = mover.activeRope;
+                    mover.activeRope = null;
+                    this.scheduleOnce(() => { if (rope?.node?.isValid) rope.node.destroy(); }, 0.1);
+                }
+                if (mover.bobbin.connection.allMembersPendingComplete()) {
+                    this.handleConnectionCompleteOnBelt(mover.bobbin.connection);
+                }
+            }
+        }
+    }
+
     /** Port từ Unity SplineManager.FireYarnRaycast nhánh BobbinWall:
      *  Bobbin.handleBobbinWallHit đã decrement ammo + damage wall + punch/splash.
      *  Hàm này chỉ chịu trách nhiệm anchor/rope/nextFirePos (cùng pattern handleYarnHit)
      *  và check completion khi ammo về 0. */
-    private handleBobbinWallRopeAndAnchor(mover: TrayMover, wall: BobbinWall, collider: import('cc').Collider) {
+    private handleBobbinWallRopeAndAnchor(mover: TrayMover, wall: BobbinWall, _collider: import('cc').Collider) {
         mover.ropeReleaseTimer = 0;
         mover.hasAnchor = true;
 
-        let cellSize = 1.0;
-        if (collider && collider.worldBounds) {
-            const he = collider.worldBounds.halfExtents;
-            cellSize = Math.max(he.x, he.z) * 2.0;
-        }
+        // Unity dùng cellW constant — KHÔNG đọc từ collider bounds.
+        const cellSize = this._cellW();
 
         // Rope target = wall center (hoặc node) — match cách Yarn dùng yarn.node.worldPosition
         const wallTarget = (wall.center ?? wall.node).worldPosition;
@@ -750,7 +867,7 @@ export class SplineManager extends Component {
         mover.nextFirePos = nextPos;
 
         const tPos = wallTarget.clone();
-        tPos.y += this.raycastYOffset;
+        tPos.y += this.raycastYOffset * (this.aboveParent?.scale.y ?? 1);
 
         if (!mover.activeRope && this.ropePrefab) {
             const ropeNode = instantiate(this.ropePrefab);

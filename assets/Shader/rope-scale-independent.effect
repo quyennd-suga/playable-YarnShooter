@@ -1,0 +1,107 @@
+// Rope Scale-Independent — port từ Unity Game/RopeScaleIndependent.shader
+// Key feature: UV.y tile theo độ dài object (scaleY) → texture KHÔNG bị stretch khi
+// rope giãn/rút. Lighting: Half-Lambert + Blinn-Phong + cavity từ HeightMap.
+
+CCEffect %{
+  techniques:
+  - name: opaque
+    passes:
+    - vert: rope-vs:vert
+      frag: rope-fs:frag
+      depthStencilState:
+        depthTest: true
+        depthWrite: true
+      properties:
+        mainTexture:     { value: white, editor: { displayName: "Rope Texture" } }
+        heightMap:       { value: white, editor: { displayName: "Height Map" } }
+        mainColor:       { value: [1.0, 1.0, 1.0, 1.0], editor: { type: color, displayName: "Color Tint" } }
+        tileU:           { value: 1.0, target: tiles.x, editor: { displayName: "Tile U" } }
+        tileV:           { value: 4.0, target: tiles.y, editor: { displayName: "Tile V" } }
+        bumpStrength:    { value: 0.3,  target: tiles.z, editor: { slide: true, range: [0.0, 1.0], step: 0.001, displayName: "Cavity Strength" } }
+        smoothness:      { value: 0.25, target: tiles.w, editor: { slide: true, range: [0.0, 1.0], step: 0.001, displayName: "Smoothness" } }
+        minLight:        { value: 0.35, target: factors.x, editor: { slide: true, range: [0.0, 1.0], step: 0.001, displayName: "Min Light" } }
+        ambientStrength: { value: 0.4,  target: factors.y, editor: { slide: true, range: [0.0, 2.0], step: 0.01,  displayName: "Ambient" } }
+}%
+
+CCProgram rope-vs %{
+  precision highp float;
+  #include <legacy/input-standard>
+  #include <builtin/uniforms/cc-global>
+  #include <legacy/local-batch>
+
+  uniform RopeParams {
+    vec4 mainColor;
+    vec4 tiles;    // x=tileU, y=tileV, z=bumpStrength, w=smoothness
+    vec4 factors;  // x=minLight, y=ambientStrength, z/w=reserved
+  };
+
+  out vec3 v_worldPos;
+  out vec3 v_worldNormal;
+  out vec2 v_uv;
+
+  vec4 vert () {
+    StandardVertInput In;
+    CCVertInput(In);
+
+    mat4 matWorld, matWorldIT;
+    CCGetWorldMatrixFull(matWorld, matWorldIT);
+
+    vec4 worldPos = matWorld * In.position;
+    v_worldPos = worldPos.xyz;
+    v_worldNormal = normalize((matWorldIT * vec4(In.normal, 0.0)).xyz);
+
+    float scaleY = length(vec3(matWorld[0][1], matWorld[1][1], matWorld[2][1]));
+    v_uv = vec2(a_texCoord.x * tiles.x, a_texCoord.y * scaleY * tiles.y);
+
+    return cc_matProj * cc_matView * worldPos;
+  }
+}%
+
+CCProgram rope-fs %{
+  precision highp float;
+  #include <builtin/uniforms/cc-global>
+  #include <legacy/output>
+
+  in vec3 v_worldPos;
+  in vec3 v_worldNormal;
+  in vec2 v_uv;
+
+  uniform RopeParams {
+    vec4 mainColor;
+    vec4 tiles;
+    vec4 factors;
+  };
+
+  uniform sampler2D mainTexture;
+  uniform sampler2D heightMap;
+
+  vec4 frag () {
+    vec4 albedo = texture(mainTexture, v_uv) * mainColor;
+    float h = texture(heightMap, v_uv).r;
+    float cavity = 1.0 - tiles.z * (1.0 - h);
+
+    vec3 N = normalize(v_worldNormal);
+    vec3 L = normalize(-cc_mainLitDir.xyz);
+    vec3 V = normalize(cc_cameraPos.xyz - v_worldPos);
+    vec3 H = normalize(L + V);
+
+    float NdotL = dot(N, L) * 0.5 + 0.5;
+    vec3 diffuse = cc_mainLitColor.rgb * NdotL;
+    vec3 litDiffuse = max(diffuse, vec3(factors.x));
+
+    float NdotH = clamp(dot(N, H), 0.0, 1.0);
+    float gloss = exp2(1.0 + 7.0 * tiles.w);
+    vec3 specular = cc_mainLitColor.rgb * pow(NdotH, gloss) * 0.25;
+
+    vec3 sky = vec3(0.5, 0.55, 0.6);
+    vec3 ground = vec3(0.25, 0.22, 0.18);
+    float hemi = N.y * 0.5 + 0.5;
+    vec3 ambient = mix(ground, sky, hemi) * factors.y;
+
+    vec3 color = albedo.rgb * ambient
+               + albedo.rgb * litDiffuse * cavity
+               + specular * cavity;
+
+    return CCFragOutput(vec4(color, 1.0));
+  }
+}%

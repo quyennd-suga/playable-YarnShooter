@@ -1,4 +1,4 @@
-import { _decorator, Component, JsonAsset, Node } from 'cc';
+import { _decorator, Component, JsonAsset, Node, Vec3 } from 'cc';
 import { MaterialPalette } from './MaterialPalette';
 import { BoardScaler } from './BoardScaler';
 import { Yarn } from './Yarn';
@@ -8,7 +8,8 @@ import { LevelManager } from './Core/LevelManager';
 import { GameManager } from './Core/GameManager';
 import { TrayManager } from './Core/TrayManager';
 import { Connection } from './Core/Connection';
-import { PixelData } from './Data/LevelInterfaces';
+import { Lock } from './Lock';
+import { PixelData, FacingDirection } from './Data/LevelInterfaces';
 
 const { ccclass, property } = _decorator;
 
@@ -52,6 +53,10 @@ export class MapGenerator extends Component {
                 ? pixels.filter(p => !healthSet.has(this._pixelKey(p.x, p.y)))
                 : pixels;
 
+            // Port 1:1 từ Unity BuildHiddenSet: pixels nằm trong surprisePixels sẽ hidden visual
+            // ("?") thay vì màu thật — Mystery Yarn. Reveal khi neighbor bị bắn → shakeNeighbors.
+            const hiddenSet = this._buildHiddenSet(data);
+
             for (let i = 0; i < yarnPixels.length; i++) {
                 const pixel = yarnPixels[i];
                 const node = MapObjectSpawner.instance.getYarn(parent);
@@ -59,11 +64,14 @@ export class MapGenerator extends Component {
                 const pos = this.boardScaler.getChildLocalPosition(pixel.x, pixel.y);
                 node.setPosition(pos.x, pos.y, pos.z);
 
-                node.getComponent(Yarn)?.setColor(MaterialPalette.getMaterialById(pixel.material).color);
                 const yarnComp = node.getComponent(Yarn);
                 if (yarnComp) {
+                    yarnComp.setColor(MaterialPalette.getMaterialById(pixel.material).color);
                     yarnComp.data = pixel;
                     GameManager.instance?.registerYarn(yarnComp);
+                    if (hiddenSet.has(this._pixelKey(pixel.x, pixel.y))) {
+                        yarnComp.setHidden();
+                    }
                 }
             }
 
@@ -71,6 +79,18 @@ export class MapGenerator extends Component {
             const pixelLookup = new Map<string, PixelData>();
             for (const p of pixels) pixelLookup.set(this._pixelKey(p.x, p.y), p);
             this.spawnBobbinWalls(data, pixelLookup, parent);
+
+            // Spawn Keys trên above layer (cùng yarns) — port 1:1 từ Unity SpawnKeys.
+            this.spawnKeys(data, parent);
+
+            // Spawn Barriers trên above layer — port 1:1 từ Unity SpawnBarriers.
+            this.spawnBarriers(data, parent);
+
+            // Spawn Creators trên above layer — port 1:1 từ Unity SpawnCreators.
+            this.spawnCreators(data, parent);
+
+            // Spawn Walls trên above layer — port 1:1 từ Unity SpawnWalls (decor thuần visual).
+            this.spawnWalls(data, parent);
 
             this.boardScaler.adjustScale();
         }
@@ -105,10 +125,10 @@ export class MapGenerator extends Component {
             const queue = queues[qIdx];
             if (!queue.shooters) continue;
 
-            // Port 1:1 từ Unity MapGenerator: cột được mirror theo trục X (queues.Count - 1 - qIdx).
-            // Đây là convention level designer Unity đang dùng — nếu thấy lệch sau khi fix
-            // có thể revert lại `qIdx * spacing` để giữ layout cũ.
-            const colX = startX + (queues.length - 1 - qIdx) * this.bobbinColumnSpacing;
+            // Cocos KHÔNG flip X như Unity (BoardScaler dùng +pixel.x → +world.x), nên KHÔNG cần
+            // áp dụng Unity's mirror formula `(queues.Count - 1 - qIdx)`. Dùng qIdx trực tiếp để
+            // queue[0] ở -X (cùng phía yarn pixel.x=0) — match alignment yarn↔bobbin trong Cocos.
+            const colX = startX + qIdx * this.bobbinColumnSpacing;
 
             for (let sIdx = 0; sIdx < queue.shooters.length; sIdx++) {
                 const shooter = queue.shooters[sIdx];
@@ -136,6 +156,9 @@ export class MapGenerator extends Component {
         }
     }
 
+    /** Port 1:1 từ Unity MapGenerator.SpawnLocks:
+     *  Thay thế Bobbin trong _rowQueues TẠI CHỖ bằng Lock — KHÔNG destroy bobbin từ scene
+     *  trước khi rời queue, vì LevelManager._rowQueues sở hữu QueueItem references. */
     private spawnLocks(data: LevelData): void {
         if (!data.Locks || !data.Locks.Shooters) return;
         const parent = this.underParent ?? this.node;
@@ -143,13 +166,25 @@ export class MapGenerator extends Component {
         for (let lockData of data.Locks.Shooters) {
             const bobbinNode = this.idToBobbin.get(lockData.ShooterId);
             if (!bobbinNode) continue;
+            const bobbinComp = bobbinNode.getComponent(Bobbin);
+            if (!bobbinComp) continue;
 
-            let lockNode = MapObjectSpawner.instance.getLock(parent);
+            const lockNode = MapObjectSpawner.instance.getLock(parent);
             lockNode.name = "Lock_" + lockData.ShooterId;
             lockNode.setPosition(bobbinNode.position);
+            const lockComp = lockNode.getComponent(Lock) ?? lockNode.addComponent(Lock);
 
-            // Xóa bobbin cũ và xóa khỏi idToBobbin vì Lock thay thế Bobbin
-            bobbinNode.destroy();
+            // Replace bobbin tại chỗ trong _rowQueues — trailing items giữ nguyên vị trí.
+            const replaced = LevelManager.instance?.replaceBobbinWithLock(bobbinComp, lockComp);
+            console.log('[spawnLocks] ShooterId=', lockData.ShooterId, 'replaced=', replaced,
+                'lockNode pos=', lockNode.position, 'worldPos=', lockNode.worldPosition);
+            if (replaced) {
+                // Release bobbin về pool (silent, không animation) vì nó đã được Lock thay thế.
+                MapObjectSpawner.instance.releaseBobbin(bobbinNode);
+            } else {
+                // Fallback: nếu bobbin chưa có trong rowQueues (corner case), giữ logic cũ.
+                bobbinNode.destroy();
+            }
             this.idToBobbin.delete(lockData.ShooterId);
         }
     }
@@ -172,20 +207,36 @@ export class MapGenerator extends Component {
         }
     }
 
+    /** Port 1:1 từ Unity MapGenerator.SpawnPipes:
+     *  Thay thế Bobbin trong _rowQueues TẠI CHỖ bằng Pipe — KHÔNG destroy bobbinNode trực tiếp,
+     *  vì LevelManager._rowQueues sở hữu QueueItem references. */
     private spawnPipes(data: LevelData): void {
         if (!data.ShooterPipes || !data.ShooterPipes.Pipes) return;
         const parent = this.underParent ?? this.node;
 
-        for (let pipeData of data.ShooterPipes.Pipes) {
+        for (const pipeData of data.ShooterPipes.Pipes) {
             const bobbinNode = this.idToBobbin.get(pipeData.ShooterId);
             if (!bobbinNode) continue;
+            const bobbinComp = bobbinNode.getComponent(Bobbin);
+            if (!bobbinComp) continue;
 
-            let pipeNode = MapObjectSpawner.instance.getPipe(parent);
-            pipeNode.name = "Pipe_" + pipeData.ShooterId;
-            pipeNode.setPosition(bobbinNode.position);
+            const pipe = MapObjectSpawner.instance.getPipe(parent);
+            if (!pipe) continue;
+            pipe.node.name = "Pipe_" + pipeData.ShooterId;
+            pipe.node.setPosition(bobbinNode.position);
+            pipe.node.setRotation(bobbinNode.rotation);
+            pipe.node.setScale(1, 1, 1);
+            pipe.data = pipeData;
+            pipe.updateText();
 
-            // Pipe cũng thay thế Bobbin
-            bobbinNode.destroy();
+            // Replace bobbin tại chỗ trong _rowQueues — trailing items giữ nguyên vị trí.
+            const replaced = LevelManager.instance?.replaceBobbinWithPipe(bobbinComp, pipe);
+            if (replaced) {
+                // Release bobbin về pool silent (đã được Pipe thay thế).
+                MapObjectSpawner.instance.releaseBobbin(bobbinNode);
+            } else {
+                bobbinNode.destroy();
+            }
             this.idToBobbin.delete(pipeData.ShooterId);
         }
     }
@@ -214,6 +265,14 @@ export class MapGenerator extends Component {
         return set;
     }
 
+    /** Port 1:1 từ Unity MapGenerator.BuildHiddenSet — tập (x,y) keys của Mystery Yarns. */
+    private _buildHiddenSet(data: LevelData): Set<string> {
+        const set = new Set<string>();
+        const hidden = data.PixelImage?.surprisePixels?.Pixels;
+        if (hidden) for (const ph of hidden) set.add(this._pixelKey(ph.x, ph.y));
+        return set;
+    }
+
     /** Port 1:1 từ Unity MapGenerator.SpawnBobbinWalls:
      *  Mỗi PixelHealthData → 1 BobbinWall đặt tại pixel (x,y), lấy areaX/areaY/material
      *  từ PixelData cùng (x,y), score = pixelHealth.health. */
@@ -238,6 +297,157 @@ export class MapGenerator extends Component {
             wall.score = ph.health;
             const color = MaterialPalette.getMaterialById(pixel.material).color;
             wall.setup(pixel.areaX ?? 1, pixel.areaY ?? 1, cellSize, color);
+        }
+    }
+
+    // ─── Key ─────────────────────────────────────────────────────────────────────
+
+    /** Port 1:1 từ Unity MapGenerator.SpawnKeys:
+     *  Mỗi KeyData → 1 Key đặt tại centroid (avg X, avg Y) của tất cả GridPoints.
+     *  Parent = aboveParent (cùng layer với Yarns) để collider raycast hit được. */
+    private spawnKeys(data: LevelData, parent: Node): void {
+        const keys = data.PixelImage?.keys?.Keys;
+        if (!keys || keys.length === 0) return;
+
+        for (const keyData of keys) {
+            if (!keyData.GridPoints || keyData.GridPoints.length === 0) continue;
+
+            // Tính centroid
+            let sumX = 0, sumZ = 0;
+            for (const pt of keyData.GridPoints) { sumX += pt.x; sumZ += pt.y; }
+            const avgX = sumX / keyData.GridPoints.length;
+            const avgZ = sumZ / keyData.GridPoints.length;
+
+            // Dùng BoardScaler để map sang world pos giống yarn (Cocos convention, không flip X)
+            const pos = this.boardScaler.getChildLocalPosition(avgX, avgZ);
+
+            const key = MapObjectSpawner.instance.getKey(parent);
+            if (!key) continue;
+            key.node.setPosition(pos.x, pos.y, pos.z);
+            key.node.setRotationFromEuler(0, 0, 0);
+            key.node.setScale(1, 1, 1);
+            console.log('[spawnKeys] spawned key at localPos=', pos, 'worldPos=', key.node.worldPosition,
+                ' prefabKey wired=', !!MapObjectSpawner.instance.prefabKey);
+        }
+    }
+
+    // ─── Wall (static decor) ─────────────────────────────────────────────────────
+
+    /** Port 1:1 từ Unity MapGenerator.SpawnWalls:
+     *  Mỗi WallData → 1 Wall đặt tại centroid của GridPoints, scale theo sqrt(count):
+     *  9 → 2.2x, 4 → 1.5x, else 1x. Không có damage/HP logic — Wall thuần visual. */
+    private spawnWalls(data: LevelData, parent: Node): void {
+        const walls = data.PixelImage?.walls?.Walls;
+        if (!walls || walls.length === 0) return;
+
+        for (const wallData of walls) {
+            if (!wallData.GridPoints || wallData.GridPoints.length === 0) continue;
+
+            // Centroid của GridPoints
+            let sumX = 0, sumZ = 0;
+            for (const pt of wallData.GridPoints) { sumX += pt.x; sumZ += pt.y; }
+            const avgX = sumX / wallData.GridPoints.length;
+            const avgZ = sumZ / wallData.GridPoints.length;
+            const pos = this.boardScaler.getChildLocalPosition(avgX, avgZ);
+
+            const wall = MapObjectSpawner.instance.getWall(parent);
+            if (!wall) continue;
+
+            // Scale theo sqrt(count) — Unity dùng (int) cast = truncate (không round).
+            // 9 grid → 3 → 2.2x; 4 grid → 2 → 1.5x; else → 1x.
+            const sideLen = Math.floor(Math.sqrt(wallData.GridPoints.length));
+            let s = 1;
+            if (sideLen === 3) s = 2.2;
+            else if (sideLen === 2) s = 1.5;
+            wall.node.setScale(s, s, s);
+            wall.node.setPosition(pos.x, pos.y, pos.z);
+            wall.node.setRotationFromEuler(0, 0, 0);
+        }
+    }
+
+    // ─── Creator (Bobbin Creator) ───────────────────────────────────────────────
+
+    /** Port 1:1 từ Unity MapGenerator.SpawnCreators:
+     *  Mỗi PixelPipeData → 1 Creator đặt tại centroid của GridPoints.
+     *  Creator lắng nghe Yarn.onDespawned để spawn yarn mới khi yarn cùng material bị bắn. */
+    private spawnCreators(data: LevelData, parent: Node): void {
+        const pipes = data.PixelImage?.pixelPipes?.Pipes;
+        if (!pipes || pipes.length === 0) return;
+
+        for (const pipe of pipes) {
+            if (!pipe.GridPoints || pipe.GridPoints.length === 0) continue;
+            if (!pipe.Queue || pipe.Queue.length === 0) continue;
+
+            // Centroid của GridPoints
+            let sumX = 0, sumZ = 0;
+            for (const pt of pipe.GridPoints) { sumX += pt.x; sumZ += pt.y; }
+            const avgX = sumX / pipe.GridPoints.length;
+            const avgZ = sumZ / pipe.GridPoints.length;
+            const pos = this.boardScaler.getChildLocalPosition(avgX, avgZ);
+
+            const creator = MapObjectSpawner.instance.getCreator(parent);
+            if (!creator) continue;
+            creator.node.setPosition(pos.x, pos.y, pos.z);
+            creator.node.setRotationFromEuler(0, 0, 0);
+            creator.node.setScale(1, 1, 1);
+            creator.setup(pipe, parent);
+        }
+    }
+
+    // ─── Barrier ─────────────────────────────────────────────────────────────────
+
+    /** Port 1:1 từ Unity MapGenerator.SpawnBarriers:
+     *  Mỗi GateData → 1 Barrier đặt sao cho BarrierTail (đuôi) khớp với centroid của GridPoints.
+     *  Hướng rotation từ Direction (Up/Right/Down/Left). Scale tổng từ sqrt(GridPoints.length). */
+    private spawnBarriers(data: LevelData, parent: Node): void {
+        const gates = data.PixelImage?.gates?.Gates;
+        if (!gates || gates.length === 0) return;
+
+        for (const gate of gates) {
+            if (!gate.GridPoints || gate.GridPoints.length === 0) continue;
+
+            // Centroid của GridPoints
+            let sumX = 0, sumZ = 0;
+            for (const pt of gate.GridPoints) { sumX += pt.x; sumZ += pt.y; }
+            const avgX = sumX / gate.GridPoints.length;
+            const avgZ = sumZ / gate.GridPoints.length;
+            const centroid = this.boardScaler.getChildLocalPosition(avgX, avgZ);
+
+            const barrier = MapObjectSpawner.instance.getBarrier(parent);
+            if (!barrier) continue;
+
+            // Rotation từ Direction. Cocos KHÔNG flip X như Unity → Right/Left phải mirror so
+            // với Unity values: Unity Right (90°) chỉ về +X world, nhưng +X world Unity = -X
+            // world Cocos (vì BoardScaler không flip pixel.x). Up/Down theo trục Z không đổi.
+            let rotY = 0;
+            switch (gate.Direction) {
+                case FacingDirection.Up:    rotY = 0;    break;
+                case FacingDirection.Right: rotY = -90;  break;   // Unity 90  → Cocos -90
+                case FacingDirection.Down:  rotY = 180;  break;
+                case FacingDirection.Left:  rotY = 90;   break;   // Unity 270 → Cocos 90
+            }
+            barrier.node.setRotationFromEuler(0, rotY, 0);
+
+            // Tính tailOffset = rot * BarrierTail.localPosition để đặt barrier sao cho TAIL khớp centroid.
+            // Áp rotation lên tail.localPosition bằng cách tính thủ công với góc Y.
+            const tailLocal = barrier.BarrierTail ? barrier.BarrierTail.position : new Vec3();
+            const rad = rotY * Math.PI / 180;
+            const cos = Math.cos(rad), sin = Math.sin(rad);
+            const tailOffX = cos * tailLocal.x + sin * tailLocal.z;
+            const tailOffZ = -sin * tailLocal.x + cos * tailLocal.z;
+            barrier.node.setPosition(centroid.x - tailOffX, centroid.y, centroid.z - tailOffZ);
+            barrier.node.setScale(1, 1, 1);
+
+            // Unity dùng (int) cast = truncate, KHÔNG round. Vd sqrt(8)=2.83 → Unity 2, KHÔNG 3.
+            const sideLen = Math.floor(Math.sqrt(gate.GridPoints.length));
+            barrier.setScale(sideLen);
+            barrier.material = gate.Material;
+            barrier.score = gate.Count;
+            barrier.setBarrierBody(gate.Length);
+            barrier.setBarrierHeadPosition(gate.Length);
+            const color = MaterialPalette.getMaterialById(gate.Material).color;
+            barrier.setColor(color);
+            barrier.initScoreSteps();
         }
     }
 

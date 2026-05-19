@@ -2,18 +2,18 @@
   "ver": "2.3.14",
   "importer": "fbx",
   "imported": true,
-  "uuid": "f6584256-8cfb-48e3-b3fd-ba01a1b7fd56",
+  "uuid": "b175bdb5-cd52-4355-a8ca-f22869398092",
   "files": [],
   "subMetas": {
     "a62fe": {
       "importer": "gltf-mesh",
-      "uuid": "f6584256-8cfb-48e3-b3fd-ba01a1b7fd56@a62fe",
+      "uuid": "b175bdb5-cd52-4355-a8ca-f22869398092@a62fe",
       "displayName": "",
       "id": "a62fe",
       "name": "Scene.mesh",
       "userData": {
         "gltfIndex": 0,
-        "triangleCount": 124
+        "triangleCount": 656
       },
       "ver": "1.1.1",
       "imported": true,
@@ -25,7 +25,7 @@
     },
     "fd73d": {
       "importer": "gltf-embeded-image",
-      "uuid": "f6584256-8cfb-48e3-b3fd-ba01a1b7fd56@fd73d",
+      "uuid": "b175bdb5-cd52-4355-a8ca-f22869398092@fd73d",
       "displayName": "",
       "id": "fd73d",
       "name": "DiffuseColor_Texture.image",
@@ -45,7 +45,7 @@
     },
     "4f17a": {
       "importer": "texture",
-      "uuid": "f6584256-8cfb-48e3-b3fd-ba01a1b7fd56@4f17a",
+      "uuid": "b175bdb5-cd52-4355-a8ca-f22869398092@4f17a",
       "displayName": "",
       "id": "4f17a",
       "name": "DiffuseColor_Texture.texture",
@@ -57,7 +57,7 @@
         "mipfilter": "none",
         "anisotropy": 0,
         "isUuid": true,
-        "imageUuidOrDatabaseUri": "f6584256-8cfb-48e3-b3fd-ba01a1b7fd56@fd73d"
+        "imageUuidOrDatabaseUri": "b175bdb5-cd52-4355-a8ca-f22869398092@fd73d"
       },
       "ver": "1.0.22",
       "imported": true,
@@ -66,12 +66,12 @@
       ],
       "subMetas": {}
     },
-    "2b303": {
+    "4a679": {
       "importer": "gltf-material",
-      "uuid": "f6584256-8cfb-48e3-b3fd-ba01a1b7fd56@2b303",
+      "uuid": "b175bdb5-cd52-4355-a8ca-f22869398092@4a679",
       "displayName": "",
-      "id": "2b303",
-      "name": "BobbinWall_1_Texture.material",
+      "id": "4a679",
+      "name": "Lock_Texture.material",
       "userData": {
         "gltfIndex": 0
       },
@@ -82,12 +82,12 @@
       ],
       "subMetas": {}
     },
-    "f946f": {
+    "051e3": {
       "importer": "gltf-scene",
-      "uuid": "f6584256-8cfb-48e3-b3fd-ba01a1b7fd56@f946f",
+      "uuid": "b175bdb5-cd52-4355-a8ca-f22869398092@051e3",
       "displayName": "",
-      "id": "f946f",
-      "name": "BobbinWall_goc.prefab",
+      "id": "051e3",
+      "name": "Lock.prefab",
       "userData": {
         "gltfIndex": 0
       },
@@ -103,7 +103,7 @@
     "imageMetas": [
       {
         "name": "DiffuseColor_Texture",
-        "uri": "f6584256-8cfb-48e3-b3fd-ba01a1b7fd56@fd73d"
+        "uri": "b175bdb5-cd52-4355-a8ca-f22869398092@fd73d"
       }
     ],
     "fbx": {
@@ -129,17 +129,17 @@
     },
     "assetFinder": {
       "meshes": [
-        "f6584256-8cfb-48e3-b3fd-ba01a1b7fd56@a62fe"
+        "b175bdb5-cd52-4355-a8ca-f22869398092@a62fe"
       ],
       "skeletons": [],
       "textures": [
-        "f6584256-8cfb-48e3-b3fd-ba01a1b7fd56@4f17a"
+        "b175bdb5-cd52-4355-a8ca-f22869398092@4f17a"
       ],
       "materials": [
-        "f6584256-8cfb-48e3-b3fd-ba01a1b7fd56@2b303"
+        "b175bdb5-cd52-4355-a8ca-f22869398092@4a679"
       ],
       "scenes": [
-        "f6584256-8cfb-48e3-b3fd-ba01a1b7fd56@f946f"
+        "b175bdb5-cd52-4355-a8ca-f22869398092@051e3"
       ]
     }
   }

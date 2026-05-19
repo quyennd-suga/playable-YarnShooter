@@ -2,16 +2,16 @@
   "ver": "1.0.27",
   "importer": "image",
   "imported": true,
-  "uuid": "de3ca9ed-c1bf-4086-b7cb-e0c1b814f442",
+  "uuid": "15193593-95c8-41d8-aa3a-042fd1040bc9",
   "files": [
-    ".json",
-    ".png"
+    ".jpg",
+    ".json"
   ],
   "subMetas": {
     "6c48a": {
       "importer": "texture",
-      "uuid": "de3ca9ed-c1bf-4086-b7cb-e0c1b814f442@6c48a",
-      "displayName": "T_Rope_AO",
+      "uuid": "15193593-95c8-41d8-aa3a-042fd1040bc9@6c48a",
+      "displayName": "CubeCreator_Texture_knit",
       "id": "6c48a",
       "name": "texture",
       "userData": {
@@ -22,7 +22,7 @@
         "mipfilter": "none",
         "anisotropy": 0,
         "isUuid": true,
-        "imageUuidOrDatabaseUri": "de3ca9ed-c1bf-4086-b7cb-e0c1b814f442",
+        "imageUuidOrDatabaseUri": "15193593-95c8-41d8-aa3a-042fd1040bc9",
         "visible": false
       },
       "ver": "1.0.22",
@@ -36,7 +36,7 @@
   "userData": {
     "type": "texture",
     "fixAlphaTransparencyArtifacts": false,
-    "hasAlpha": true,
-    "redirect": "de3ca9ed-c1bf-4086-b7cb-e0c1b814f442@6c48a"
+    "hasAlpha": false,
+    "redirect": "15193593-95c8-41d8-aa3a-042fd1040bc9@6c48a"
   }
 }

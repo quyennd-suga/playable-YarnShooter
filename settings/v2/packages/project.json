@@ -3,8 +3,10 @@
   "general": {
     "designResolution": {
       "fitHeight": false,
-      "height": 2048,
-      "width": 1024
-    }
-  }
+      "height": 1280,
+      "width": 720
+    },
+    "highQuality": true
+  },
+  "custom_joint_texture_layouts": []
 }

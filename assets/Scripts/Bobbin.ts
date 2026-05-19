@@ -8,6 +8,8 @@ import { SplineManager } from './Core/SplineManager';
 import { LevelManager } from './Core/LevelManager';
 import { TrayManager } from './Core/TrayManager';
 import { BobbinWall } from './BobbinWall';
+import { Key } from './Key';
+import { Barrier } from './Barrier';
 const { ccclass, property } = _decorator;
 
 @ccclass('Bobbin')
@@ -79,6 +81,13 @@ export class Bobbin extends Component {
                 ?? this.inactiveVisual.getComponentInChildren(MeshRenderer);
             if (mr) this._matInactive = mr.getMaterialInstance(0);
         }
+        // Initial label states cho fresh-instantiated bobbin (không qua pool resetState):
+        //   score3 ON (default visible từ trước/dưới), score1/2 OFF, mystery OFF.
+        // Match Unity ResetForPool initial pattern. setActiveState/setMystery sẽ override sau.
+        if (this.score1) this.score1.node.active = false;
+        if (this.score2) this.score2.node.active = false;
+        if (this.score3) this.score3.node.active = true;
+        if (this.mystery) this.mystery.active = false;
     }
 
     start() {
@@ -129,6 +138,8 @@ export class Bobbin extends Component {
             // Trong grid queue: swap visual + label theo flag active
             if (this.activeVisual) this.activeVisual.active = active;
             if (this.inactiveVisual) this.inactiveVisual.active = !active;
+            // Match Unity SetBobbinState: score1 toggle theo active, KHÔNG gate bởi mystery.
+            // Mystery icon stays sticky — score1 + mystery có thể coexist (Unity behavior).
             if (this.score1) this.score1.node.active = active;
             if (this.score2) this.score2.node.active = false;
         } else {
@@ -168,9 +179,8 @@ export class Bobbin extends Component {
     }
 
     /** Đánh dấu bobbin này là Mystery (port 1:1 từ Unity Bobbin.SetMystery).
-     *  - Ẩn score3 (số đạn mặc định) để không lộ thông tin.
-     *  - Bật node mystery (hiển thị icon "?").
-     *  - Đổi material inactiveVisual sang HiddenShooterMaterial để che màu thật. */
+     *  Mystery icon là "sticky" — không tự tắt khi bobbin trở thành head/belt; chỉ thay thế
+     *  score3 mặc định + đổi material inactiveVisual. score1/2 vẫn toggle bình thường theo state. */
     public setMystery(): void {
         if (this.score3) this.score3.node.active = false;
         if (this.mystery) this.mystery.active = true;
@@ -296,6 +306,44 @@ export class Bobbin extends Component {
         return true;
     }
 
+    /** Port 1:1 từ Unity Bobbin.HandleBarrierHit.
+     *  Trừ HP barrier (decrementScore lerp body shrink). Hết HP → barrier auto release pool.
+     *  KHÔNG tự trừ ammo bobbin — Unity SplineManager.FireYarnRaycast làm điều đó tại nhánh
+     *  `if (isMatch) mover.Bobbin.score--` sau khi handler trả true. Trong Cocos,
+     *  SplineManager.handleBarrierRopeAndAnchor sẽ gọi decrementAmmo.
+     *  Trả false nếu: bobbin hết ammo, mismatch material, hoặc barrier đã chết — raycast bị block. */
+    public handleBarrierHit(barrier: Barrier): boolean {
+        if (!this.data || this.data.ammo <= 0) return false;
+        if (!barrier) return false;
+        if (barrier.material !== this.data.material) return false;
+        if (barrier.score <= 0) return false;
+
+        // Unity: spinIndicator.Trigger() + UpdateRings — chưa port spinIndicator
+        this.updateRings();
+        barrier.decrementScore();
+        return true;
+    }
+
+    /** Port 1:1 từ Unity Bobbin.HandleKeyHit.
+     *  Khác BobbinWall/Yarn: KHÔNG trừ ammo, KHÔNG yêu cầu material match.
+     *  Flow:
+     *    1. Tìm Lock đầu hàng chưa reserved qua LevelManager.tryFindHeadLock()
+     *    2. key.tryActivate(lockWorldPos, () => LevelManager.unlockRow(rowIdx))
+     *       → key fly arc tới lockPos rồi gọi unlockRow.
+     *    3. Trả false nếu key đã used hoặc không có lock nào → raycast bị block tại key. */
+    public handleKeyHit(key: Key): boolean {
+        if (!key) { console.log('[handleKeyHit] key null'); return false; }
+        const headLock = LevelManager.instance?.tryFindHeadLock();
+        if (!headLock) { console.log('[handleKeyHit] NO head lock found (lock không ở row[0] hoặc đã reserved)'); return false; }
+        console.log('[handleKeyHit] found headLock rowIdx=', headLock.rowIdx, 'worldPos=', headLock.worldPos);
+        if (!key.tryActivate(headLock.worldPos, () => {
+            console.log('[handleKeyHit] onUnlocked callback fired → unlockRow', headLock.rowIdx);
+            LevelManager.instance?.unlockRow(headLock.rowIdx);
+        })) { console.log('[handleKeyHit] key.tryActivate FAILED (key đã used)'); return false; }
+        console.log('[handleKeyHit] key activated, flying to lock...');
+        return true;
+    }
+
     /** Bobbin này có thể tham gia checkout trong connection không?
      *  True nếu đang ở đầu hàng, hoặc tất cả bobbin đứng trước trong hàng đều cùng connection.
      *  (Port 1:1 từ Unity Bobbin.IsEffectivelyActiveForConnection). */
@@ -352,6 +400,49 @@ export class Bobbin extends Component {
 
         // Center về vị trí inactive (giống Unity ResetState:288)
         if (this.center) this.center.setPosition(0, -0.1, 0);
+    }
+
+    /** Port 1:1 từ Unity Bobbin.BeginSpawnFromPipe.
+     *  Bobbin xuất hiện tại vị trí pipe (scale=0), nhảy tới targetWorld với easeIn cubic,
+     *  scale lên 1. Trong animation collider bị tắt → không clickable. */
+    public beginSpawnFromPipe(targetWorld: Vec3, duration: number = 0.45): void {
+        const fromWorld = this.node.worldPosition.clone();
+        const to = targetWorld.clone();
+
+        Tween.stopAllByTarget(this.node);
+        this.node.setScale(Vec3.ZERO);
+
+        const ctx = { t: 0 };
+        const tmp = new Vec3();
+
+        tween(ctx)
+            .to(duration, { t: 1 }, {
+                onUpdate: () => {
+                    if (!this.node?.isValid) return;
+                    const t = Math.max(0, Math.min(1, ctx.t));
+                    const easeIn = t * t * t; // EaseInCubic — chậm đầu, nhanh cuối
+                    tmp.set(
+                        fromWorld.x + (to.x - fromWorld.x) * easeIn,
+                        fromWorld.y + (to.y - fromWorld.y) * easeIn,
+                        fromWorld.z + (to.z - fromWorld.z) * easeIn,
+                    );
+                    this.node.setWorldPosition(tmp);
+                    this.node.setScale(easeIn, easeIn, easeIn);
+                }
+            })
+            .call(() => {
+                if (!this.node?.isValid) return;
+                this.node.setWorldPosition(to);
+                this.node.setScale(1, 1, 1);
+                this.updateOriginPos();
+                // Unity: SpawnFxBobbin tại vị trí bobbin (y+0.275) — match _playMysteryRevealVfx pattern
+                const spawner = MapObjectSpawner.instance;
+                if (spawner) {
+                    const wp = this.node.worldPosition;
+                    spawner.spawnFxBobbin(new Vec3(wp.x, wp.y + 0.275, wp.z));
+                }
+            })
+            .start();
     }
 
     public shake() {

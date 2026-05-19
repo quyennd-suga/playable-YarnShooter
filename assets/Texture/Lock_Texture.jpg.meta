@@ -2,16 +2,16 @@
   "ver": "1.0.27",
   "importer": "image",
   "imported": true,
-  "uuid": "ffd39973-e051-47ac-abae-84f8187bbd8e",
+  "uuid": "928df95d-9a3b-4853-82bd-c623f536f2db",
   "files": [
-    ".json",
-    ".png"
+    ".jpg",
+    ".json"
   ],
   "subMetas": {
     "6c48a": {
       "importer": "texture",
-      "uuid": "ffd39973-e051-47ac-abae-84f8187bbd8e@6c48a",
-      "displayName": "T_Rope_normal",
+      "uuid": "928df95d-9a3b-4853-82bd-c623f536f2db@6c48a",
+      "displayName": "Lock_Texture",
       "id": "6c48a",
       "name": "texture",
       "userData": {
@@ -22,7 +22,7 @@
         "mipfilter": "none",
         "anisotropy": 0,
         "isUuid": true,
-        "imageUuidOrDatabaseUri": "ffd39973-e051-47ac-abae-84f8187bbd8e",
+        "imageUuidOrDatabaseUri": "928df95d-9a3b-4853-82bd-c623f536f2db",
         "visible": false
       },
       "ver": "1.0.22",
@@ -36,7 +36,7 @@
   "userData": {
     "type": "texture",
     "fixAlphaTransparencyArtifacts": false,
-    "hasAlpha": true,
-    "redirect": "ffd39973-e051-47ac-abae-84f8187bbd8e@6c48a"
+    "hasAlpha": false,
+    "redirect": "928df95d-9a3b-4853-82bd-c623f536f2db@6c48a"
   }
 }
