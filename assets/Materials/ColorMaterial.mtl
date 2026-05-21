@@ -10,7 +10,9 @@
   },
   "_techIdx": 0,
   "_defines": [
-    {},
+    {
+      "USE_INSTANCING": true
+    },
     {}
   ],
   "_states": [
@@ -35,13 +37,6 @@
   ],
   "_props": [
     {
-      "albedoColor": {
-        "__type__": "cc.Color",
-        "r": 30,
-        "g": 228,
-        "b": 237,
-        "a": 255
-      },
       "smoothness": 1,
       "specularIntensity": 0,
       "diffuseSmoothness": 1,

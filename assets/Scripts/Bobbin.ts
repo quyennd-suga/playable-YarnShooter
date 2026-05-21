@@ -64,22 +64,35 @@ export class Bobbin extends Component {
     /** Reference tới BobbinFrozen wrap quanh bobbin (set bởi MapGenerator.spawnFrozenShooters). */
     public frozenMechanic: Component = null;
 
-    private _mat: Material = null;
-    private _matInactive: Material = null; // Material instance của inactiveVisual (cùng material asset với mesh chính)
+    /** Cache TẤT CẢ MeshRenderer dưới activeVisual + inactiveVisual + node root để bulk-color.
+     *  Không cache Material vì instancing yêu cầu share material asset (getMaterialInstance
+     *  phá batching). Color đi qua instance attribute. */
+    private _colorableMRs: MeshRenderer[] = [];
     private _originPos: Vec3 = new Vec3();
+
+    /** Buffer dùng chung khi push color vào instance attribute — tránh allocate mỗi setColor. */
+    private static _instColorBuf: number[] = [1, 1, 1, 1];
+    /** Buffer phụ cho stripe shader (colorB của ring). */
+    private static _instColorBufB: number[] = [1, 1, 1, 1];
     private _score2WorldRotLock: Quat = null; // Capture lúc bobbin ngồi lên tray lần đầu
     private _initialScore: number = 0; // Ammo gốc khi spawn (dùng để tính tỉ lệ ring active)
     public currentColor: Color = new Color(255, 255, 255, 255);
 
     onLoad() {
-        if (this.meshRenderer) {
-            this._mat = this.meshRenderer.getMaterialInstance(0);
+        // KHÔNG gọi getMaterialInstance — sẽ tạo material unique per bobbin → phá GPU instancing.
+        // Color truyền qua a_instanceColor attribute (xem setColor + mk-toon-simple-outline.effect).
+        // Cache MỌI MeshRenderer trong activeVisual + inactiveVisual subtree để tránh trường hợp
+        // 1 visual chứa nhiều mesh (vd. body + cap) — color sẽ apply lên tất cả.
+        this._colorableMRs = [];
+        if (this.activeVisual) {
+            this._colorableMRs.push(...this.activeVisual.getComponentsInChildren(MeshRenderer));
         }
-        // Lấy material instance của inactiveVisual (dùng cùng material asset)
         if (this.inactiveVisual) {
-            const mr = this.inactiveVisual.getComponent(MeshRenderer)
-                ?? this.inactiveVisual.getComponentInChildren(MeshRenderer);
-            if (mr) this._matInactive = mr.getMaterialInstance(0);
+            this._colorableMRs.push(...this.inactiveVisual.getComponentsInChildren(MeshRenderer));
+        }
+        // Fallback: nếu activeVisual/inactiveVisual chưa wire, dùng meshRenderer property
+        if (this._colorableMRs.length === 0 && this.meshRenderer) {
+            this._colorableMRs.push(this.meshRenderer);
         }
         // Initial label states cho fresh-instantiated bobbin (không qua pool resetState):
         //   score3 ON (default visible từ trước/dưới), score1/2 OFF, mystery OFF.
@@ -97,33 +110,56 @@ export class Bobbin extends Component {
 
     public setColor(color: Color): void {
         this.currentColor.set(color);
-        if (this._mat) {
-            this._mat.setProperty('albedoColor', color);
+        // Đẩy color qua per-instance attribute thay vì setProperty (uniform).
+        // Giữ shared material asset → Cocos batch tất cả bobbin thành 1 instanced draw call.
+        // Shader mk-toon-simple-outline nhân `albedoColor * v_instanceColor` trong frag
+        // (chỉ khi USE_INSTANCING ON và material KHÔNG có albedoMap).
+        // → giữ albedoColor material = (1,1,1,1) trên asset, instance color = màu thật.
+        const buf = Bobbin._instColorBuf;
+        buf[0] = color.r / 255;
+        buf[1] = color.g / 255;
+        buf[2] = color.b / 255;
+        buf[3] = color.a / 255;
+
+        // Apply lên tất cả MR đã cache (active + inactive subtree)
+        for (let i = 0; i < this._colorableMRs.length; i++) {
+            const mr = this._colorableMRs[i];
+            if (mr?.node?.isValid) {
+                mr.setInstancedAttribute('a_instanceColor', buf);
+            }
         }
-        // inactiveVisual cùng material → áp dụng cùng cách
-        if (this._matInactive) {
-            this._matInactive.setProperty('albedoColor', color);
-        }
+
         // Cập nhật màu cho các ring trên ropeCircle (vân sọc giống rope trail)
         this._updateRopeRingColors(color);
     }
 
     /** Đổi màu các ring trên ropeCircle dùng shader mk-toon-stripe.
-     *  Dùng chung helper RopeSimulator.computeStripeColor để ring và rope trail luôn đồng bộ tone. */
+     *  Dùng chung helper RopeSimulator.computeStripeColor để ring và rope trail luôn đồng bộ tone.
+     *  KHÔNG getMaterialInstance — đẩy 2 màu qua per-instance attribute (a_instanceColorA/B)
+     *  để Cocos batch tất cả ring (20 bobbin × ~10 ring = 200 ring) thành 1 instanced draw call. */
     private _updateRopeRingColors(color: Color): void {
         if (!this.ropeCircle) return;
         const colorA = color;
         const colorB = RopeSimulator.computeStripeColor(color);
 
+        const bufA = Bobbin._instColorBuf;
+        bufA[0] = colorA.r / 255;
+        bufA[1] = colorA.g / 255;
+        bufA[2] = colorA.b / 255;
+        bufA[3] = colorA.a / 255;
+
+        const bufB = Bobbin._instColorBufB;
+        bufB[0] = colorB.r / 255;
+        bufB[1] = colorB.g / 255;
+        bufB[2] = colorB.b / 255;
+        bufB[3] = colorB.a / 255;
+
         for (let i = 0; i < this.ropeCircle.children.length; i++) {
             const ring = this.ropeCircle.children[i];
             const mr = ring.getComponent(MeshRenderer) ?? ring.getComponentInChildren(MeshRenderer);
             if (!mr) continue;
-            const mat = mr.getMaterialInstance(0);
-            if (!mat) continue;
-
-            mat.setProperty('colorA', colorA);
-            mat.setProperty('colorB', colorB);
+            mr.setInstancedAttribute('a_instanceColorA', bufA);
+            mr.setInstancedAttribute('a_instanceColorB', bufB);
         }
     }
 

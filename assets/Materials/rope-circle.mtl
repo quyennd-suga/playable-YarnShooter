@@ -10,7 +10,9 @@
   },
   "_techIdx": 0,
   "_defines": [
-    {}
+    {
+      "USE_INSTANCING": true
+    }
   ],
   "_states": [
     {
@@ -32,18 +34,11 @@
         "z": 0,
         "w": 0
       },
-      "colorA": {
-        "__type__": "cc.Color",
-        "r": 255,
-        "g": 77,
-        "b": 77,
-        "a": 255
-      },
       "colorB": {
         "__type__": "cc.Color",
-        "r": 143,
-        "g": 62,
-        "b": 62,
+        "r": 255,
+        "g": 255,
+        "b": 255,
         "a": 255
       },
       "stripeCount": 15,

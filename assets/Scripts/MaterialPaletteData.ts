@@ -6,7 +6,7 @@ export interface MaterialEntry {
 export const EMPTY_MATERIAL: MaterialEntry = { id: -1, color: '#26262600' };
 
 export const MATERIAL_PALETTE: readonly MaterialEntry[] = [
-    { id: 0,  color: '#000000' },
+    { id: 0,  color: '#292929' },
     { id: 1,  color: '#F31612' },
     { id: 2,  color: '#FA780A' },
     { id: 3,  color: '#F9CB03' },

@@ -1,5 +1,5 @@
 import {
-    _decorator, Component, Node, Vec3, Color, Collider, Material, MeshRenderer,
+    _decorator, Component, Node, Vec3, Color, Collider, MeshRenderer,
     tween, Tween,
 } from 'cc';
 import { GameManager } from './Core/GameManager';
@@ -40,8 +40,10 @@ export class Yarn extends Component {
     @property(Node)         public hidden:       Node         = null;
 
     private _col:        Collider      = null;
-    private _mat:        Material      = null;
     private _shakeTween: Tween<object> = null;
+
+    /** Buffer dùng chung khi push color vào instance attribute — tránh allocate mỗi setColor. */
+    private static _instColorBuf: number[] = [1, 1, 1, 1];
 
     // pre-allocated — tránh GC trong hot path
     private _shakeOrigin:   Vec3   = new Vec3();
@@ -56,7 +58,9 @@ export class Yarn extends Component {
 
     onLoad() {
         this._col = this.getComponent(Collider);
-        this._mat = this.meshRenderer.getMaterialInstance(0);
+        // KHÔNG gọi getMaterialInstance — sẽ tạo material instance riêng cho mỗi yarn
+        // → phá GPU instancing batching. Color giờ truyền qua a_instanceColor attribute
+        // (xem setColor + mk-toon-simple.effect).
     }
 
     /** Stop tất cả tween đang chạy trên 3 target objects khi component bị destroy.
@@ -202,8 +206,17 @@ export class Yarn extends Component {
     }
 
     public setColor(color: Color): void {
-        this._mat?.setProperty('albedoColor', color);
-        //this._mat?.setProperty('albedo', color);
+        if (!this.meshRenderer) return;
+        // Đẩy color qua per-instance attribute thay vì setProperty (uniform) — giữ shared
+        // material asset để Cocos batch tất cả yarn thành 1 instanced draw call.
+        // Shader mk-toon-simple nhân `albedoColor * v_instanceColor` trong frag, nên giữ
+        // albedoColor material = (1,1,1,1) (trắng), v_instanceColor = màu yarn thực.
+        const buf = Yarn._instColorBuf;
+        buf[0] = color.r / 255;
+        buf[1] = color.g / 255;
+        buf[2] = color.b / 255;
+        buf[3] = color.a / 255;
+        this.meshRenderer.setInstancedAttribute('a_instanceColor', buf);
     }
 
     public setHidden(): void {

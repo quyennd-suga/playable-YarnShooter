@@ -246,7 +246,7 @@
       "__id__": 2
     },
     "_children": [],
-    "_active": true,
+    "_active": false,
     "_components": [
       {
         "__id__": 9
@@ -298,7 +298,7 @@
     },
     "_materials": [
       {
-        "__uuid__": "36dfa281-c81a-4139-995d-6a847b7e00ee",
+        "__uuid__": "ade8a15a-dcca-4b3c-84c6-f6476ac875bb",
         "__expectedType__": "cc.Material"
       }
     ],
@@ -513,7 +513,7 @@
     },
     "_materials": [
       {
-        "__uuid__": "36dfa281-c81a-4139-995d-6a847b7e00ee",
+        "__uuid__": "ade8a15a-dcca-4b3c-84c6-f6476ac875bb",
         "__expectedType__": "cc.Material"
       }
     ],
@@ -658,6 +658,7 @@
     "shakeRadius": 0.3,
     "shakeDuration": 0.28,
     "shakeMagnitude": 0.005,
+    "neighborRadiusCells": 1,
     "meshRenderer": {
       "__id__": 4
     },

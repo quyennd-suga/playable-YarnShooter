@@ -1,0 +1,153 @@
+{
+  "ver": "2.3.14",
+  "importer": "fbx",
+  "imported": true,
+  "uuid": "3f56cbbc-b6a6-4197-9ddb-dda185918dc0",
+  "files": [],
+  "subMetas": {
+    "73684": {
+      "importer": "gltf-mesh",
+      "uuid": "3f56cbbc-b6a6-4197-9ddb-dda185918dc0@73684",
+      "displayName": "",
+      "id": "73684",
+      "name": "Cube.012.mesh",
+      "userData": {
+        "gltfIndex": 0,
+        "triangleCount": 208
+      },
+      "ver": "1.1.1",
+      "imported": true,
+      "files": [
+        ".bin",
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "88b23": {
+      "importer": "gltf-mesh",
+      "uuid": "3f56cbbc-b6a6-4197-9ddb-dda185918dc0@88b23",
+      "displayName": "",
+      "id": "88b23",
+      "name": "Cube.010.mesh",
+      "userData": {
+        "gltfIndex": 1,
+        "triangleCount": 208
+      },
+      "ver": "1.1.1",
+      "imported": true,
+      "files": [
+        ".bin",
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "0a48a": {
+      "importer": "gltf-mesh",
+      "uuid": "3f56cbbc-b6a6-4197-9ddb-dda185918dc0@0a48a",
+      "displayName": "",
+      "id": "0a48a",
+      "name": "Cube.007.mesh",
+      "userData": {
+        "gltfIndex": 2,
+        "triangleCount": 670
+      },
+      "ver": "1.1.1",
+      "imported": true,
+      "files": [
+        ".bin",
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "12b8b": {
+      "importer": "gltf-mesh",
+      "uuid": "3f56cbbc-b6a6-4197-9ddb-dda185918dc0@12b8b",
+      "displayName": "",
+      "id": "12b8b",
+      "name": "Torus.mesh",
+      "userData": {
+        "gltfIndex": 3,
+        "triangleCount": 280
+      },
+      "ver": "1.1.1",
+      "imported": true,
+      "files": [
+        ".bin",
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "bbc3b": {
+      "importer": "gltf-material",
+      "uuid": "3f56cbbc-b6a6-4197-9ddb-dda185918dc0@bbc3b",
+      "displayName": "",
+      "id": "bbc3b",
+      "name": "Snake_color.material",
+      "userData": {
+        "gltfIndex": 0
+      },
+      "ver": "1.0.14",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "6b93d": {
+      "importer": "gltf-scene",
+      "uuid": "3f56cbbc-b6a6-4197-9ddb-dda185918dc0@6b93d",
+      "displayName": "",
+      "id": "6b93d",
+      "name": "Snake 1.prefab",
+      "userData": {
+        "gltfIndex": 0
+      },
+      "ver": "1.0.14",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    }
+  },
+  "userData": {
+    "imageMetas": [],
+    "fbx": {
+      "smartMaterialEnabled": true
+    },
+    "lods": {
+      "enable": false,
+      "hasBuiltinLOD": false,
+      "options": [
+        {
+          "screenRatio": 0.25,
+          "faceCount": 1
+        },
+        {
+          "screenRatio": 0.125,
+          "faceCount": 0.25
+        },
+        {
+          "screenRatio": 0.01,
+          "faceCount": 0.1
+        }
+      ]
+    },
+    "assetFinder": {
+      "meshes": [
+        "3f56cbbc-b6a6-4197-9ddb-dda185918dc0@73684",
+        "3f56cbbc-b6a6-4197-9ddb-dda185918dc0@88b23",
+        "3f56cbbc-b6a6-4197-9ddb-dda185918dc0@0a48a",
+        "3f56cbbc-b6a6-4197-9ddb-dda185918dc0@12b8b"
+      ],
+      "skeletons": [],
+      "textures": [],
+      "materials": [
+        "3f56cbbc-b6a6-4197-9ddb-dda185918dc0@bbc3b"
+      ],
+      "scenes": [
+        "3f56cbbc-b6a6-4197-9ddb-dda185918dc0@6b93d"
+      ]
+    }
+  }
+}

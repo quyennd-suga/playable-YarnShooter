@@ -87,6 +87,13 @@ CCProgram toon-vs %{
     vec4 tilingOffset;
   };
 
+  // Per-instance color: chỉ bật khi instancing ON và material KHÔNG có albedoMap.
+  // Material có texture → fallback rendering bình thường (không tint per-instance).
+  #if USE_INSTANCING && !USE_ALBEDO_MAP
+    in lowp vec4 a_instanceColor;
+    out lowp vec4 v_instanceColor;
+  #endif
+
   out vec3 v_worldPos;
   out vec3 v_worldNormal;
   out vec3 v_worldTangent;
@@ -109,6 +116,10 @@ CCProgram toon-vs %{
     #else
       v_worldTangent = vec3(1.0, 0.0, 0.0);
       v_worldBitangent = vec3(0.0, 1.0, 0.0);
+    #endif
+
+    #if USE_INSTANCING && !USE_ALBEDO_MAP
+      v_instanceColor = a_instanceColor;
     #endif
 
     v_uv = a_texCoord * tilingOffset.xy + tilingOffset.zw;
@@ -135,6 +146,11 @@ CCProgram toon-fs %{
   #pragma define-meta USE_RIM
   // Light mode: 0=Cel, 1=Banded, 2=Smooth (mặc định Cel)
   #pragma define-meta MK_LIGHT_MODE range([0, 2])
+
+  // Per-instance color (gated bởi USE_INSTANCING && !USE_ALBEDO_MAP — xem vertex shader).
+  #if USE_INSTANCING && !USE_ALBEDO_MAP
+    in lowp vec4 v_instanceColor;
+  #endif
 
   uniform ToonFragConstants {
     vec4 albedoColor;
@@ -184,6 +200,11 @@ CCProgram toon-fs %{
     vec4 base = albedoColor;
     #if USE_ALBEDO_MAP
       base *= texture(albedoMap, v_uv);
+    #else
+      // Không có texture → cho phép tint per-instance khi instancing ON
+      #if USE_INSTANCING
+        base *= v_instanceColor;
+      #endif
     #endif
     #if USE_ALPHA_TEST
       if (base.a < alphaCutoff) discard;

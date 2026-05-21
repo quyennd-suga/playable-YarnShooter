@@ -45,6 +45,14 @@ CCProgram stripe-vs %{
     vec4 tilingOffset;
   };
 
+  // Per-instance 2 màu sen kẽ: chỉ bật khi USE_INSTANCING ON.
+  #if USE_INSTANCING
+    in lowp vec4 a_instanceColorA;
+    in lowp vec4 a_instanceColorB;
+    out lowp vec4 v_instanceColorA;
+    out lowp vec4 v_instanceColorB;
+  #endif
+
   out vec3 v_worldPos;
   out vec3 v_worldNormal;
   out vec3 v_worldTangent;
@@ -64,6 +72,11 @@ CCProgram stripe-vs %{
     v_worldBitangent = cross(v_worldNormal, v_worldTangent) * In.tangent.w;
     v_uv = a_texCoord * tilingOffset.xy + tilingOffset.zw;
 
+    #if USE_INSTANCING
+      v_instanceColorA = a_instanceColorA;
+      v_instanceColorB = a_instanceColorB;
+    #endif
+
     return cc_matProj * cc_matView * worldPos;
   }
 }%
@@ -78,6 +91,11 @@ CCProgram stripe-fs %{
   in vec3 v_worldTangent;
   in vec3 v_worldBitangent;
   in vec2 v_uv;
+
+  #if USE_INSTANCING
+    in lowp vec4 v_instanceColorA;
+    in lowp vec4 v_instanceColorB;
+  #endif
 
   uniform StripeFragConstants {
     vec4 colorA;
@@ -107,10 +125,18 @@ CCProgram stripe-fs %{
   }
 
   vec4 frag () {
+    // 2 màu sen kẽ — uniform * instance (instance = (1,1,1,1) khi không instancing).
+    vec4 ca = colorA;
+    vec4 cb = colorB;
+    #if USE_INSTANCING
+      ca *= v_instanceColorA;
+      cb *= v_instanceColorB;
+    #endif
+
     // ── Procedural stripe (giống rope-stripe trail) ──
     float f = fract(v_uv.x * stripeCount + v_uv.y * diagonalAmount);
     float stripeMask = smoothstep(colorARatio - edgeSoftness, colorARatio + edgeSoftness, f);
-    vec4 base = mix(colorA, colorB, stripeMask);
+    vec4 base = mix(ca, cb, stripeMask);
 
     // ── AO shadow multiplier ──
     float ao = texture(aoMap, v_uv).r;
